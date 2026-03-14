@@ -342,7 +342,7 @@
           </div>
           <div class="product-info">
             <div class="product-header">
-              <div class="product-name">${p.category} — ${p.color}</div>
+              <div class="product-name"><span class="name-category">${p.category}</span> <span class="name-color">— ${p.color}</span></div>
               <div class="product-serial">#${p.serial}</div>
             </div>
             <div class="product-details">
