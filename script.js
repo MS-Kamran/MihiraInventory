@@ -13,6 +13,7 @@
   let products = [];
   let filteredProducts = [];
   let currentFilter = 'all';
+  let currentColorFilter = 'all';
   let currentView = 'grid';
   let currentModalProduct = null;
 
@@ -28,6 +29,7 @@
     tableBody: $('#tableBody'),
     searchInput: $('#searchInput'),
     filterGroup: $('#filterGroup'),
+    colorFilterGroup: $('#colorFilterGroup'),
     saleModal: $('#saleModal'),
     modalPreview: $('#modalPreview'),
     saleQty: $('#saleQty'),
@@ -245,7 +247,7 @@
   // ===== CATEGORY FILTERS =====
 
   function buildCategoryFilters() {
-    const cats = [...new Set(products.map(p => p.category).filter(Boolean))];
+    const cats = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
     let html = '<button class="filter-btn active" data-filter="all">All</button>';
     cats.forEach(cat => {
       html += `<button class="filter-btn" data-filter="${cat}">${cat}</button>`;
@@ -257,6 +259,30 @@
         els.filterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentFilter = btn.dataset.filter;
+        buildColorFilters();
+        applyFilters();
+      });
+    });
+
+    buildColorFilters();
+  }
+
+  function buildColorFilters() {
+    // Get colors from currently visible category
+    const filtered = currentFilter === 'all' ? products : products.filter(p => p.category === currentFilter);
+    const colors = [...new Set(filtered.map(p => p.color).filter(Boolean))].sort();
+    let html = '<button class="filter-btn active" data-filter="all">All Colors</button>';
+    colors.forEach(color => {
+      html += `<button class="filter-btn" data-filter="${color}">${color}</button>`;
+    });
+    safeSetHTML(els.colorFilterGroup, html);
+    currentColorFilter = 'all';
+
+    els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentColorFilter = btn.dataset.filter;
         applyFilters();
       });
     });
@@ -270,6 +296,8 @@
     filteredProducts = products.filter(p => {
       // Category filter
       if (currentFilter !== 'all' && p.category !== currentFilter) return false;
+      // Color filter
+      if (currentColorFilter !== 'all' && p.color !== currentColorFilter) return false;
       // Search query
       if (query) {
         const haystack = `${p.serial} ${p.category} ${p.color} ${p.size}`.toLowerCase();
@@ -321,10 +349,6 @@
               <div class="detail-item">
                 <span class="detail-label">Size</span>
                 <span class="detail-value">${p.size || '—'}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Sets Qty</span>
-                <span class="detail-value">${p.setQty}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">Churi/Set</span>
