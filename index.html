@@ -70,6 +70,12 @@
           <button class="filter-btn active" data-filter="all">All Colors</button>
         </div>
       </div>
+      <div class="filter-box">
+        <div class="filter-box-label">📏 Size</div>
+        <div class="filter-group" id="sizeFilterGroup">
+          <button class="filter-btn active" data-filter="all">All Sizes</button>
+        </div>
+      </div>
       <div class="view-toggle">
         <button class="view-btn active" data-view="grid" id="viewGrid" title="Grid view">▦</button>
         <button class="view-btn" data-view="table" id="viewTable" title="Table view">☰</button>
@@ -119,20 +125,30 @@
   <div class="modal-overlay" id="saleModal">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title">🛒 Record Sale</div>
+        <div class="modal-title" id="modalTitle">🛒 Record Action</div>
         <button class="modal-close" id="modalClose">✕</button>
       </div>
       <div class="modal-body">
         <div class="modal-product-preview" id="modalPreview"></div>
+        <div class="form-group action-toggle">
+          <label class="toggle-option">
+            <input type="radio" name="saleAction" value="sale" checked>
+            <span class="toggle-btn sale-btn">🛒 Sale</span>
+          </label>
+          <label class="toggle-option">
+            <input type="radio" name="saleAction" value="return">
+            <span class="toggle-btn return-btn">↩️ Return</span>
+          </label>
+        </div>
         <div class="form-group">
-          <label class="form-label" for="saleQty">Quantity Sold (Sets)</label>
-          <input type="number" class="form-input" id="saleQty" min="0" placeholder="Enter number of sets sold">
+          <label class="form-label" id="qtyInputLabel" for="saleQty">Quantity Sold (Sets)</label>
+          <input type="number" class="form-input" id="saleQty" min="1" placeholder="Enter number of sets">
           <div class="form-hint" id="saleHint">Available: — sets</div>
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn" id="modalCancel">Cancel</button>
-        <button class="btn btn-primary" id="modalConfirm">Confirm Sale</button>
+        <button class="btn btn-primary" id="modalConfirm">Confirm</button>
       </div>
     </div>
   </div>

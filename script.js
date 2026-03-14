@@ -15,6 +15,7 @@
   let filteredProducts = [];
   let currentFilter = 'all';
   let currentColorFilter = 'all';
+  let currentSizeFilter = 'all';
   let currentView = 'grid';
   let currentModalProduct = null;
 
@@ -31,9 +32,12 @@
     searchInput: $('#searchInput'),
     filterGroup: $('#filterGroup'),
     colorFilterGroup: $('#colorFilterGroup'),
+    sizeFilterGroup: $('#sizeFilterGroup'),
     saleModal: $('#saleModal'),
+    modalTitle: $('#modalTitle'),
     modalPreview: $('#modalPreview'),
     saleQty: $('#saleQty'),
+    qtyInputLabel: $('#qtyInputLabel'),
     saleHint: $('#saleHint'),
     toastContainer: $('#toastContainer'),
     statProducts: $('#statProducts'),
@@ -284,6 +288,33 @@
         els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentColorFilter = btn.dataset.filter;
+        buildSizeFilters();
+        applyFilters();
+      });
+    });
+
+    buildSizeFilters();
+  }
+
+  function buildSizeFilters() {
+    // Get sizes from currently visible category & color
+    let filtered = products;
+    if (currentFilter !== 'all') filtered = filtered.filter(p => p.category === currentFilter);
+    if (currentColorFilter !== 'all') filtered = filtered.filter(p => p.color === currentColorFilter);
+    
+    const sizes = [...new Set(filtered.map(p => p.size).filter(Boolean))].sort();
+    let html = '<button class="filter-btn active" data-filter="all">All Sizes</button>';
+    sizes.forEach(size => {
+      html += `<button class="filter-btn" data-filter="${size}">${size}</button>`;
+    });
+    safeSetHTML(els.sizeFilterGroup, html);
+    currentSizeFilter = 'all';
+
+    els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSizeFilter = btn.dataset.filter;
         applyFilters();
       });
     });
@@ -299,6 +330,8 @@
       if (currentFilter !== 'all' && p.category !== currentFilter) return false;
       // Color filter
       if (currentColorFilter !== 'all' && p.color !== currentColorFilter) return false;
+      // Size filter
+      if (currentSizeFilter !== 'all' && p.size !== currentSizeFilter) return false;
       // Search query
       if (query) {
         const haystack = `${p.serial} ${p.category} ${p.color} ${p.size}`.toLowerCase();
@@ -508,8 +541,39 @@
     els.saleQty.value = '';
     els.saleQty.max = available;
     els.saleModal.classList.add('active');
+    
+    // Reset toggle to Sale
+    const saleRadio = document.querySelector('input[name="saleAction"][value="sale"]');
+    if (saleRadio) saleRadio.checked = true;
+    updateModalContext();
+
     setTimeout(() => els.saleQty.focus(), 200);
   }
+
+  function updateModalContext() {
+    if (!currentModalProduct) return;
+    const isReturn = document.querySelector('input[name="saleAction"]:checked').value === 'return';
+    const p = currentModalProduct;
+    const sold = getSoldCount(p.key) + p.sheetSold;
+    const available = Math.max(0, p.setQty - sold);
+
+    if (isReturn) {
+      els.modalTitle.textContent = '↩️ Record Return';
+      els.qtyInputLabel.textContent = 'Quantity Returned (Sets)';
+      els.saleHint.textContent = `Maximum you can return: ${sold} sets`;
+      els.saleQty.max = sold;
+    } else {
+      els.modalTitle.textContent = '🛒 Record Sale';
+      els.qtyInputLabel.textContent = 'Quantity Sold (Sets)';
+      els.saleHint.textContent = `Available: ${available} sets | Already sold: ${sold}`;
+      els.saleQty.max = available;
+    }
+  }
+
+  // Listen to toggle changes
+  document.querySelectorAll('input[name="saleAction"]').forEach(radio => {
+    radio.addEventListener('change', updateModalContext);
+  });
 
   function closeSaleModal() {
     els.saleModal.classList.remove('active');
@@ -526,23 +590,36 @@
       return;
     }
 
-    const currentSold = getSoldCount(p.key);
-    const totalSoldAfter = currentSold + p.sheetSold + qty;
-    const available = p.setQty - totalSoldAfter;
-
-    if (available < 0) {
-      showToast('⚠️ Not enough stock available!', 'error');
-      return;
-    }
+    const isReturn = document.querySelector('input[name="saleAction"]:checked').value === 'return';
 
     // Disable confirm button and show loading
     const confirmBtn = $('#modalConfirm');
     const originalText = confirmBtn.textContent;
-    confirmBtn.textContent = '⏳ Updating Sheet...';
+    confirmBtn.textContent = '⏳ Updating...';
     confirmBtn.disabled = true;
+
+    // Validate logic based on action
+    const currentSold = getSoldCount(p.key);
+    const totalSoldAfter = currentSold + p.sheetSold + (isReturn ? -qty : qty);
+    const available = p.setQty - totalSoldAfter;
+
+    if (!isReturn && available < 0) {
+      showToast('⚠️ Not enough stock available!', 'error');
+      confirmBtn.textContent = originalText;
+      confirmBtn.disabled = false;
+      return;
+    }
+
+    if (isReturn && totalSoldAfter < 0) {
+      showToast('⚠️ Cannot return more than total sold!', 'error');
+      confirmBtn.textContent = originalText;
+      confirmBtn.disabled = false;
+      return;
+    }
 
     try {
       // Send to Google Sheet via Apps Script
+      // For returns, we send negative qty so the sheet logic can just add it
       const response = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -552,15 +629,17 @@
           category: p.category,
           color: p.color,
           size: p.size,
-          soldQty: qty
+          soldQty: isReturn ? -qty : qty
         })
       });
 
       // Also save to localStorage as backup
-      setSoldCount(p.key, currentSold + qty);
+      setSoldCount(p.key, currentSold + (isReturn ? -qty : qty));
       closeSaleModal();
       applyFilters();
-      showToast(`✅ Recorded ${qty} set(s) sold for ${p.category} ${p.color} (Size ${p.size}) — Sheet updated!`, 'success');
+      
+      const actionText = isReturn ? 'returned to stock' : 'sold';
+      showToast(`✅ ${qty} set(s) ${actionText} for ${p.category} ${p.color} — Sheet updated!`, 'success');
 
     } catch (err) {
       console.error('Apps Script error:', err);
