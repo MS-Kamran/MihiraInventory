@@ -577,6 +577,31 @@ body {
   color: var(--text-primary);
 }
 
+.detail-highlight-size {
+  color: var(--teal);
+  background: var(--teal-bg);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: inline-block;
+}
+
+.detail-highlight-avail {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: inline-block;
+}
+
+.detail-highlight-avail.avail-out {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .price-section {
   display: flex;
   align-items: center;

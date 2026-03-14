@@ -348,7 +348,7 @@
             <div class="product-details">
               <div class="detail-item">
                 <span class="detail-label">Size</span>
-                <span class="detail-value">${p.size || '—'}</span>
+                <span class="detail-value detail-highlight-size">${p.size || '—'}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">Churi/Set</span>
@@ -356,7 +356,7 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">Available</span>
-                <span class="detail-value" style="color: ${available === 0 ? 'var(--danger, #ef4444)' : '#10b981'}">${available}</span>
+                <span class="detail-value detail-highlight-avail ${available === 0 ? 'avail-out' : ''}">${available}</span>
               </div>
             </div>
             <div class="price-section">
