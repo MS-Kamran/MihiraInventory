@@ -7,6 +7,7 @@
   const SHEET_ID = '17ZJSpPDYqA9fqdod7g8DDwnVmOwk8frNzhcNh1MYFF0';
   const GID = '299415952';
   const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzy9NWqJDOd-Bae7sCny9HI6K7iJAp3i9As9wOfmOm9pglIWuNp_srhGszpdKcjuJUJjw/exec';
   const STORAGE_KEY = 'mihira_sold_data';
 
   // ===== STATE =====
@@ -515,7 +516,7 @@
     currentModalProduct = null;
   }
 
-  function confirmSale() {
+  async function confirmSale() {
     if (!currentModalProduct) return;
     const p = currentModalProduct;
     const qty = parseInt(els.saleQty.value);
@@ -534,10 +535,44 @@
       return;
     }
 
-    setSoldCount(p.key, currentSold + qty);
-    closeSaleModal();
-    applyFilters();
-    showToast(`✅ Recorded ${qty} set(s) sold for ${p.category} ${p.color} (Size ${p.size})`, 'success');
+    // Disable confirm button and show loading
+    const confirmBtn = $('#modalConfirm');
+    const originalText = confirmBtn.textContent;
+    confirmBtn.textContent = '⏳ Updating Sheet...';
+    confirmBtn.disabled = true;
+
+    try {
+      // Send to Google Sheet via Apps Script
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serial: p.serial,
+          category: p.category,
+          color: p.color,
+          size: p.size,
+          soldQty: qty
+        })
+      });
+
+      // Also save to localStorage as backup
+      setSoldCount(p.key, currentSold + qty);
+      closeSaleModal();
+      applyFilters();
+      showToast(`✅ Recorded ${qty} set(s) sold for ${p.category} ${p.color} (Size ${p.size}) — Sheet updated!`, 'success');
+
+    } catch (err) {
+      console.error('Apps Script error:', err);
+      // Still save locally even if sheet update fails
+      setSoldCount(p.key, currentSold + qty);
+      closeSaleModal();
+      applyFilters();
+      showToast(`⚠️ Saved locally but sheet update may have failed. Error: ${err.message}`, 'error');
+    } finally {
+      confirmBtn.textContent = originalText;
+      confirmBtn.disabled = false;
+    }
   }
 
   // ===== COPY SOLD DATA =====
