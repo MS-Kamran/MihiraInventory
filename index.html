@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Mihira Sales Price List - Manage inventory, track sales, and view product details for bangles and churis.">
+  <title>Mihira Sales — Price List & Inventory</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ===== HEADER ===== -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="header-logo">M</div>
+        <div>
+          <div class="header-title">Mihira Sales</div>
+          <div class="header-subtitle">Price List & Inventory Dashboard</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-success" id="btnCopySold" title="Copy sold data to clipboard">
+          📋 Copy Sold Data
+        </button>
+        <button class="btn" id="btnResetSold" title="Reset all sold tracking data">
+          🔄 Reset
+        </button>
+        <button class="btn btn-primary" id="btnRefresh" title="Refresh data from sheet">
+          ⟳ Refresh
+        </button>
+      </div>
+    </header>
+
+    <!-- ===== STATS ===== -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">📦</div>
+        <div class="stat-value" id="statProducts">—</div>
+        <div class="stat-label">Total Products</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">✅</div>
+        <div class="stat-value" id="statAvailable">—</div>
+        <div class="stat-label">Available Sets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🛒</div>
+        <div class="stat-value" id="statSold">—</div>
+        <div class="stat-label">Sets Sold</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-value" id="statRevenue">—</div>
+        <div class="stat-label">Est. Revenue</div>
+      </div>
+    </div>
+
+    <!-- ===== CONTROLS ===== -->
+    <div class="controls-bar">
+      <div class="search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="searchInput" placeholder="Search by category, color, serial no...">
+      </div>
+      <div class="filter-group" id="filterGroup">
+        <button class="filter-btn active" data-filter="all">All</button>
+      </div>
+      <div class="view-toggle">
+        <button class="view-btn active" data-view="grid" id="viewGrid" title="Grid view">▦</button>
+        <button class="view-btn" data-view="table" id="viewTable" title="Table view">☰</button>
+      </div>
+    </div>
+
+    <!-- ===== CONTENT AREA ===== -->
+    <div id="contentArea">
+      <div class="loading-container" id="loadingState">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading products from Mihira Sales...</div>
+      </div>
+    </div>
+
+    <!-- ===== GRID VIEW ===== -->
+    <div class="products-grid" id="productsGrid" style="display:none;"></div>
+
+    <!-- ===== TABLE VIEW ===== -->
+    <div class="products-table-wrapper" id="tableWrapper">
+      <table class="products-table">
+        <thead>
+          <tr>
+            <th>S/N</th>
+            <th>Product</th>
+            <th>Size</th>
+            <th>Sets Qty</th>
+            <th>Churi/Set</th>
+            <th>Selling Price</th>
+            <th>New Price</th>
+            <th>Discount (16%)</th>
+            <th>Sold</th>
+            <th>Available</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="app-footer">
+      Mihira Sales — Price List & Inventory Dashboard &copy; 2026
+    </footer>
+  </div>
+
+  <!-- ===== SALE MODAL ===== -->
+  <div class="modal-overlay" id="saleModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">🛒 Record Sale</div>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-product-preview" id="modalPreview"></div>
+        <div class="form-group">
+          <label class="form-label" for="saleQty">Quantity Sold (Sets)</label>
+          <input type="number" class="form-input" id="saleQty" min="0" placeholder="Enter number of sets sold">
+          <div class="form-hint" id="saleHint">Available: — sets</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="modalCancel">Cancel</button>
+        <button class="btn btn-primary" id="modalConfirm">Confirm Sale</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
