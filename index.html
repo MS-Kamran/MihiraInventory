@@ -59,22 +59,31 @@
         <input type="text" class="search-input" id="searchInput" placeholder="Search by category, color, serial no...">
       </div>
       <div class="filter-box">
-        <div class="filter-box-label">📂 Category</div>
-        <div class="filter-group" id="filterGroup">
+        <label class="filter-box-label" for="categorySelect">📂 Category</label>
+        <div class="filter-group desktop-filters" id="filterGroup">
           <button class="filter-btn active" data-filter="all">All</button>
         </div>
+        <select class="filter-select mobile-filters" id="categorySelect">
+          <option value="all">All</option>
+        </select>
       </div>
       <div class="filter-box">
-        <div class="filter-box-label">🎨 Color</div>
-        <div class="filter-group" id="colorFilterGroup">
+        <label class="filter-box-label" for="colorSelect">🎨 Color</label>
+        <div class="filter-group desktop-filters" id="colorFilterGroup">
           <button class="filter-btn active" data-filter="all">All Colors</button>
         </div>
+        <select class="filter-select mobile-filters" id="colorSelect">
+          <option value="all">All Colors</option>
+        </select>
       </div>
       <div class="filter-box">
-        <div class="filter-box-label">📏 Size</div>
-        <div class="filter-group" id="sizeFilterGroup">
+        <label class="filter-box-label" for="sizeSelect">📏 Size</label>
+        <div class="filter-group desktop-filters" id="sizeFilterGroup">
           <button class="filter-btn active" data-filter="all">All Sizes</button>
         </div>
+        <select class="filter-select mobile-filters" id="sizeSelect">
+          <option value="all">All Sizes</option>
+        </select>
       </div>
       <div class="view-toggle">
         <button class="view-btn active" data-view="grid" id="viewGrid" title="Grid view">▦</button>

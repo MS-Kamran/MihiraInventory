@@ -33,6 +33,9 @@
     filterGroup: $('#filterGroup'),
     colorFilterGroup: $('#colorFilterGroup'),
     sizeFilterGroup: $('#sizeFilterGroup'),
+    categorySelect: $('#categorySelect'),
+    colorSelect: $('#colorSelect'),
+    sizeSelect: $('#sizeSelect'),
     saleModal: $('#saleModal'),
     modalTitle: $('#modalTitle'),
     modalPreview: $('#modalPreview'),
@@ -253,70 +256,127 @@
 
   function buildCategoryFilters() {
     const cats = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+    
+    // Desktop Buttons
     let html = '<button class="filter-btn active" data-filter="all">All</button>';
+    // Mobile Select
+    let optionsHtml = '<option value="all">All Category</option>';
+    
     cats.forEach(cat => {
       html += `<button class="filter-btn" data-filter="${cat}">${cat}</button>`;
+      optionsHtml += `<option value="${cat}">${cat}</option>`;
     });
+    
     safeSetHTML(els.filterGroup, html);
+    safeSetHTML(els.categorySelect, optionsHtml);
 
+    // Sync Desktop -> Mobile
     els.filterGroup.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         els.filterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentFilter = btn.dataset.filter;
+        els.categorySelect.value = currentFilter; // Sync visual
         buildColorFilters();
         applyFilters();
       });
+    });
+
+    // Sync Mobile -> Desktop
+    els.categorySelect.addEventListener('change', (e) => {
+      currentFilter = e.target.value;
+      els.filterGroup.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === currentFilter);
+      });
+      buildColorFilters();
+      applyFilters();
     });
 
     buildColorFilters();
   }
 
   function buildColorFilters() {
-    // Get colors from currently visible category
     const filtered = currentFilter === 'all' ? products : products.filter(p => p.category === currentFilter);
     const colors = [...new Set(filtered.map(p => p.color).filter(Boolean))].sort();
+    
+    // Desktop
     let html = '<button class="filter-btn active" data-filter="all">All Colors</button>';
+    // Mobile
+    let optionsHtml = '<option value="all">All Colors</option>';
+
     colors.forEach(color => {
       html += `<button class="filter-btn" data-filter="${color}">${color}</button>`;
+      optionsHtml += `<option value="${color}">${color}</option>`;
     });
+    
     safeSetHTML(els.colorFilterGroup, html);
+    safeSetHTML(els.colorSelect, optionsHtml);
     currentColorFilter = 'all';
 
+    // Sync Desktop -> Mobile
     els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentColorFilter = btn.dataset.filter;
+        els.colorSelect.value = currentColorFilter; // Sync visual
         buildSizeFilters();
         applyFilters();
       });
+    });
+
+    // Sync Mobile -> Desktop
+    els.colorSelect.addEventListener('change', (e) => {
+      currentColorFilter = e.target.value;
+      els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === currentColorFilter);
+      });
+      buildSizeFilters();
+      applyFilters();
     });
 
     buildSizeFilters();
   }
 
   function buildSizeFilters() {
-    // Get sizes from currently visible category & color
     let filtered = products;
     if (currentFilter !== 'all') filtered = filtered.filter(p => p.category === currentFilter);
     if (currentColorFilter !== 'all') filtered = filtered.filter(p => p.color === currentColorFilter);
     
     const sizes = [...new Set(filtered.map(p => p.size).filter(Boolean))].sort();
+    
+    // Desktop
     let html = '<button class="filter-btn active" data-filter="all">All Sizes</button>';
+    // Mobile
+    let optionsHtml = '<option value="all">All Sizes</option>';
+
     sizes.forEach(size => {
       html += `<button class="filter-btn" data-filter="${size}">${size}</button>`;
+      optionsHtml += `<option value="${size}">${size}</option>`;
     });
+    
     safeSetHTML(els.sizeFilterGroup, html);
+    safeSetHTML(els.sizeSelect, optionsHtml);
     currentSizeFilter = 'all';
 
+    // Sync Desktop -> Mobile
     els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentSizeFilter = btn.dataset.filter;
+        els.sizeSelect.value = currentSizeFilter; // Sync visual
         applyFilters();
       });
+    });
+
+    // Sync Mobile -> Desktop
+    els.sizeSelect.addEventListener('change', (e) => {
+      currentSizeFilter = e.target.value;
+      els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === currentSizeFilter);
+      });
+      applyFilters();
     });
   }
 
