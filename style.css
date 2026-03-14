@@ -215,7 +215,7 @@ body {
 /* ===== STAT CARDS ===== */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   padding: 20px;
 }
@@ -338,13 +338,11 @@ body {
 .filter-group {
   display: flex;
   gap: 6px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  flex-wrap: wrap;
   padding: 2px 0;
 }
 
-.filter-group::-webkit-scrollbar { display: none; }
+
 
 .filter-btn {
   padding: 7px 14px;

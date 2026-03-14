@@ -36,7 +36,6 @@
     statProducts: $('#statProducts'),
     statAvailable: $('#statAvailable'),
     statSold: $('#statSold'),
-    statRevenue: $('#statRevenue'),
   };
 
   // ===== HELPERS =====
@@ -332,8 +331,8 @@
                 <span class="detail-value">${p.churiInSet}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Sold / Available</span>
-                <span class="detail-value" style="color: ${available === 0 ? 'var(--danger)' : 'var(--success)'}">${sold} / ${available}</span>
+                <span class="detail-label">Available</span>
+                <span class="detail-value" style="color: ${available === 0 ? 'var(--danger, #ef4444)' : '#10b981'}">${available}</span>
               </div>
             </div>
             <div class="price-section">
@@ -443,7 +442,6 @@
     animateCounter(els.statProducts, totalProducts);
     animateCounter(els.statAvailable, totalAvailable);
     animateCounter(els.statSold, totalSold);
-    els.statRevenue.textContent = formatPrice(revenue);
   }
 
   function animateCounter(el, target) {
