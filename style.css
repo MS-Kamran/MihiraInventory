@@ -215,7 +215,7 @@ body {
 /* ===== STAT CARDS ===== */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   padding: 20px;
 }
@@ -265,6 +265,32 @@ body {
 .stat-card:nth-child(2) .stat-icon { background: rgba(16, 185, 129, 0.1); }
 .stat-card:nth-child(3) .stat-icon { background: rgba(192, 139, 107, 0.1); }
 .stat-card:nth-child(4) .stat-icon { background: var(--rose-gold-bg); }
+
+/* ===== CLEAR FILTERS BUTTON ===== */
+.btn-clear-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--clay);
+  border-radius: var(--radius-full);
+  background: rgba(192, 139, 107, 0.1);
+  color: var(--clay-dark);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-clear-filters:hover {
+  background: var(--clay);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(192, 139, 107, 0.3);
+}
 
 .stat-value {
   font-family: 'Outfit', sans-serif;
@@ -669,6 +695,34 @@ body {
   margin-bottom: 10px;
 }
 
+/* ===== LAST SALE DATE ON CARD ===== */
+.last-sale-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--rose-gold-bg);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+
+.last-sale-icon {
+  font-size: 0.75rem;
+}
+
+.last-sale-text {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--clay-dark);
+  letter-spacing: 0.02em;
+}
+
+.table-last-sale {
+  font-size: 0.78rem;
+  color: var(--clay-dark);
+  font-weight: 500;
+}
+
 .current-price {
   font-family: 'Outfit', sans-serif;
   font-size: 1.1rem;
@@ -1060,7 +1114,7 @@ body {
 
 /* Tablets & small laptops */
 @media (max-width: 1024px) {
-  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  .stats-grid { grid-template-columns: repeat(4, 1fr); }
   .products-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 }
 

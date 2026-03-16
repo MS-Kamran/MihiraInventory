@@ -9,6 +9,7 @@
   const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzy9NWqJDOd-Bae7sCny9HI6K7iJAp3i9As9wOfmOm9pglIWuNp_srhGszpdKcjuJUJjw/exec';
   const STORAGE_KEY = 'mihira_sold_data';
+  const SEARCH_HISTORY_KEY = 'mihira_search_popularity';
 
   // ===== STATE =====
   let products = [];
@@ -18,6 +19,7 @@
   let currentSizeFilter = 'all';
   let currentView = 'grid';
   let currentModalProduct = null;
+  let isInitialLoad = true;
 
   // ===== DOM REFS =====
   const $ = (sel) => document.querySelector(sel);
@@ -46,6 +48,8 @@
     statProducts: $('#statProducts'),
     statAvailable: $('#statAvailable'),
     statSold: $('#statSold'),
+    statDailySales: $('#statDailySales'),
+    btnClearFilters: $('#btnClearFilters'),
   };
 
   // ===== HELPERS =====
@@ -205,6 +209,7 @@
         const discountPrice = r[12] || '';
         const sheetSold = r[13] || '';
         const availableSets = r[14] || '';
+        const lastSaleDate = r[15] || '';
 
         const key = `${serial}_${category}_${color}_${size}`;
 
@@ -222,6 +227,7 @@
           discountPrice: parseFloat(discountPrice) || 0,
           sheetSold: parseInt(sheetSold) || 0,
           sheetAvailable: parseInt(availableSets) || 0,
+          lastSaleDate: lastSaleDate.trim(),
           key,
         });
       }
@@ -229,6 +235,9 @@
       buildCategoryFilters();
       applyFilters();
       updateStats();
+
+      // After first load, disable initial load sorting
+      isInitialLoad = false;
 
       els.contentArea.style.display = 'none';
       showView(currentView);
@@ -380,6 +389,55 @@
     });
   }
 
+  // ===== SEARCH POPULARITY TRACKING =====
+
+  function getSearchPopularity() {
+    try {
+      return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  function trackSearchPopularity(query, matchedProducts) {
+    if (!query || matchedProducts.length === 0) return;
+    const popularity = getSearchPopularity();
+    matchedProducts.forEach(p => {
+      popularity[p.key] = (popularity[p.key] || 0) + 1;
+    });
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(popularity));
+  }
+
+  // ===== CLEAR ALL FILTERS =====
+
+  function clearAllFilters() {
+    currentFilter = 'all';
+    currentColorFilter = 'all';
+    currentSizeFilter = 'all';
+    els.searchInput.value = '';
+
+    // Sync desktop buttons
+    els.filterGroup.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === 'all');
+    });
+    els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === 'all');
+    });
+    els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === 'all');
+    });
+
+    // Sync mobile selects
+    els.categorySelect.value = 'all';
+    els.colorSelect.value = 'all';
+    els.sizeSelect.value = 'all';
+
+    // Rebuild dependent filters
+    buildColorFilters();
+    applyFilters();
+    showToast('✕ All filters cleared', 'info');
+  }
+
   // ===== FILTERING & SEARCH =====
 
   function applyFilters() {
@@ -399,6 +457,17 @@
       }
       return true;
     });
+
+    // Track search popularity when user searches
+    if (query) {
+      trackSearchPopularity(query, filteredProducts);
+    }
+
+    // On initial load (no filters active), sort by search popularity
+    if (isInitialLoad || (!query && currentFilter === 'all' && currentColorFilter === 'all' && currentSizeFilter === 'all')) {
+      const popularity = getSearchPopularity();
+      filteredProducts.sort((a, b) => (popularity[b.key] || 0) - (popularity[a.key] || 0));
+    }
 
     renderGrid();
     renderTable();
@@ -453,6 +522,11 @@
                 <span class="detail-value detail-highlight-avail ${available === 0 ? 'avail-out' : ''}">${available}</span>
               </div>
             </div>
+            ${p.lastSaleDate ? `
+            <div class="last-sale-date">
+              <span class="last-sale-icon">📅</span>
+              <span class="last-sale-text">Last Sale: ${p.lastSaleDate}</span>
+            </div>` : ''}
             <div class="price-section">
               <span class="current-price">${formatPrice(p.discountPrice || p.sellingPrice)}</span>
               ${p.newPrice && p.newPrice !== p.sellingPrice
@@ -512,6 +586,7 @@
           <td class="table-price">${formatPrice(p.discountPrice)}</td>
           <td><span style="font-weight:600; color: var(--warning);">${sold}</span></td>
           <td><span class="table-stock ${stockClass}">${available}</span></td>
+          <td><span class="table-last-sale">${p.lastSaleDate || '—'}</span></td>
           <td>
             <button class="btn btn-primary" style="padding:6px 14px; font-size:0.78rem;" onclick="window.mihira.openSale('${p.key}')">
               🛒 Sell
@@ -542,24 +617,50 @@
 
   // ===== STATS =====
 
+  /** Get today's date string in common formats for comparison */
+  function getTodayStrings() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    // Return multiple common formats for flexible matching
+    return [
+      `${yyyy}-${mm}-${dd}`,       // 2026-03-16
+      `${dd}/${mm}/${yyyy}`,       // 16/03/2026
+      `${mm}/${dd}/${yyyy}`,       // 03/16/2026
+      `${dd}-${mm}-${yyyy}`,       // 16-03-2026
+      `${mm}-${dd}-${yyyy}`,       // 03-16-2026
+    ];
+  }
+
   function updateStats() {
     const list = filteredProducts.length ? filteredProducts : products;
     let totalProducts = list.length;
     let totalSold = 0;
     let totalAvailable = 0;
-    let revenue = 0;
+    let dailySales = 0;
+
+    const todayStrings = getTodayStrings();
 
     list.forEach(p => {
       const sold = getSoldCount(p.key) + p.sheetSold;
       const avail = Math.max(0, p.setQty - sold);
       totalSold += sold;
       totalAvailable += avail;
-      revenue += sold * (p.discountPrice || p.sellingPrice);
+
+      // Count daily sales based on Last Sale Date matching today
+      if (p.lastSaleDate) {
+        const saleDate = p.lastSaleDate.trim();
+        if (todayStrings.some(fmt => saleDate.includes(fmt))) {
+          dailySales += sold;
+        }
+      }
     });
 
     animateCounter(els.statProducts, totalProducts);
     animateCounter(els.statAvailable, totalAvailable);
     animateCounter(els.statSold, totalSold);
+    animateCounter(els.statDailySales, dailySales);
   }
 
   function animateCounter(el, target) {
@@ -757,8 +858,11 @@
   function resetSoldData() {
     if (!confirm('Are you sure you want to reset all sold tracking data? This cannot be undone.')) return;
     localStorage.removeItem(STORAGE_KEY);
-    applyFilters();
-    showToast('🔄 Sold data has been reset', 'info');
+    
+    // Pull fresh data from sheet after reset
+    isInitialLoad = true;
+    showToast('🔄 Resetting tracking data and pooling fresh data from sheet...', 'info');
+    fetchData();
   }
 
   // ===== EVENT LISTENERS =====
@@ -788,9 +892,13 @@
     $('#btnCopySold').addEventListener('click', copySoldData);
     $('#btnResetSold').addEventListener('click', resetSoldData);
     $('#btnRefresh').addEventListener('click', () => {
+      isInitialLoad = true;
       showToast('⟳ Refreshing data...', 'info');
       fetchData();
     });
+
+    // Clear filters button
+    els.btnClearFilters.addEventListener('click', clearAllFilters);
 
     // Expose to global for onclick handlers
     window.mihira = { openSale: openSaleModal };

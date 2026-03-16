@@ -49,7 +49,11 @@
         <div class="stat-value" id="statSold">—</div>
         <div class="stat-label">Sets Sold</div>
       </div>
-
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-value" id="statDailySales">—</div>
+        <div class="stat-label">Today's Sales</div>
+      </div>
     </div>
 
     <!-- ===== CONTROLS ===== -->
@@ -85,6 +89,9 @@
           <option value="all">All Sizes</option>
         </select>
       </div>
+      <button class="btn btn-clear-filters" id="btnClearFilters" title="Clear all filters">
+        ✕ Clear Filters
+      </button>
       <div class="view-toggle">
         <button class="view-btn active" data-view="grid" id="viewGrid" title="Grid view">▦</button>
         <button class="view-btn" data-view="table" id="viewTable" title="Table view">☰</button>
@@ -117,6 +124,7 @@
             <th>Discount (16%)</th>
             <th>Sold</th>
             <th>Available</th>
+            <th>Last Sale</th>
             <th>Action</th>
           </tr>
         </thead>
