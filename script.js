@@ -17,6 +17,7 @@
   let currentFilter = 'all';
   let currentColorFilter = 'all';
   let currentSizeFilter = 'all';
+  let currentStockFilter = 'all';
   let currentView = 'grid';
   let currentModalProduct = null;
   let isInitialLoad = true;
@@ -35,9 +36,11 @@
     filterGroup: $('#filterGroup'),
     colorFilterGroup: $('#colorFilterGroup'),
     sizeFilterGroup: $('#sizeFilterGroup'),
+    stockFilterGroup: $('#stockFilterGroup'),
     categorySelect: $('#categorySelect'),
     colorSelect: $('#colorSelect'),
     sizeSelect: $('#sizeSelect'),
+    stockSelect: $('#stockSelect'),
     saleModal: $('#saleModal'),
     modalTitle: $('#modalTitle'),
     modalPreview: $('#modalPreview'),
@@ -438,10 +441,47 @@
     showToast('✕ All filters cleared', 'info');
   }
 
+  // ===== STOCK FILTERS =====
+  function initStockFilters() {
+    // Sync Desktop -> Mobile
+    els.stockFilterGroup.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        els.stockFilterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentStockFilter = btn.dataset.filter;
+        els.stockSelect.value = currentStockFilter;
+        applyFilters();
+      });
+    });
+
+    // Sync Mobile -> Desktop
+    els.stockSelect.addEventListener('change', (e) => {
+      currentStockFilter = e.target.value;
+      els.stockFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === currentStockFilter);
+      });
+      applyFilters();
+    });
+  }
+
   // ===== FILTERING & SEARCH =====
 
   function applyFilters() {
-    const query = els.searchInput.value.toLowerCase().trim();
+    let query = els.searchInput.value.toLowerCase().trim();
+    let prefixType = null;
+    let prefixValue = null;
+
+    // Detect smart search prefix
+    if (query.startsWith('cat:')) {
+      prefixType = 'category';
+      prefixValue = query.substring(4).trim();
+    } else if (query.startsWith('c:')) {
+      prefixType = 'color';
+      prefixValue = query.substring(2).trim();
+    } else if (query.startsWith('s:')) {
+      prefixType = 'size';
+      prefixValue = query.substring(2).trim();
+    }
 
     filteredProducts = products.filter(p => {
       // Category filter
@@ -450,10 +490,24 @@
       if (currentColorFilter !== 'all' && p.color !== currentColorFilter) return false;
       // Size filter
       if (currentSizeFilter !== 'all' && p.size !== currentSizeFilter) return false;
+
+      // Stock filter
+      const sold = getSoldCount(p.key) + p.sheetSold;
+      const available = Math.max(0, p.setQty - sold);
+      if (currentStockFilter === 'in_stock' && available === 0) return false;
+      if (currentStockFilter === 'low_stock' && (available > 2 || available === 0)) return false;
+      if (currentStockFilter === 'out_of_stock' && available > 0) return false;
+
       // Search query
       if (query) {
-        const haystack = `${p.serial} ${p.category} ${p.color} ${p.size}`.toLowerCase();
-        if (!haystack.includes(query)) return false;
+        if (prefixType) {
+          // Smart prefix search
+          if (!p[prefixType].toLowerCase().includes(prefixValue)) return false;
+        } else {
+          // Standard global search
+          const haystack = `${p.serial} ${p.category} ${p.color} ${p.size}`.toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
       }
       return true;
     });
@@ -534,11 +588,13 @@
                 : ''}
               ${p.discountPrice ? '<span class="discount-tag">16% OFF</span>' : ''}
             </div>
-            <div class="product-footer">
-              <button class="btn btn-primary" onclick="window.mihira.openSale('${p.key}')">
-                🛒 Record Sale
+            <div class="product-footer" style="display: flex; gap: 4px;">
+              <button class="btn btn-primary" style="flex: 1;" onclick="window.mihira.openSale('${p.key}')">
+                🛒 Sell
               </button>
-              ${p.link ? `<a class="btn" href="${p.link}" target="_blank" rel="noopener">🖼 View Image</a>` : ''}
+              <button class="btn btn-quick" onclick="window.mihira.quickSale('${p.key}', 1)" title="Quick Sale +1">+1</button>
+              <button class="btn btn-quick" onclick="window.mihira.quickSale('${p.key}', -1)" title="Quick Return -1">-1</button>
+              ${p.link ? `<a class="btn" style="flex: 0 0 32px; padding: 0; display: flex; align-items: center; justify-content: center;" href="${p.link}" target="_blank" rel="noopener" title="View Image">🖼</a>` : ''}
             </div>
           </div>
         </div>`;
@@ -588,9 +644,13 @@
           <td><span class="table-stock ${stockClass}">${available}</span></td>
           <td><span class="table-last-sale">${p.lastSaleDate || '—'}</span></td>
           <td>
-            <button class="btn btn-primary" style="padding:6px 14px; font-size:0.78rem;" onclick="window.mihira.openSale('${p.key}')">
-              🛒 Sell
-            </button>
+            <div style="display: flex; gap: 4px;">
+              <button class="btn btn-primary" style="padding:6px 14px; font-size:0.78rem;" onclick="window.mihira.openSale('${p.key}')">
+                🛒 Sell
+              </button>
+              <button class="btn btn-quick" style="padding:6px; font-size:0.75rem;" onclick="window.mihira.quickSale('${p.key}', 1)">+1</button>
+              <button class="btn btn-quick" style="padding:6px; font-size:0.75rem;" onclick="window.mihira.quickSale('${p.key}', -1)">-1</button>
+            </div>
           </td>
         </tr>`;
     });
@@ -815,6 +875,60 @@
     }
   }
 
+  // ===== QUICK SALE (+1 / -1) =====
+
+  async function performQuickSale(key, qty) {
+    const p = products.find(x => x.key === key);
+    if (!p) return;
+
+    const isReturn = qty < 0;
+    const absQty = Math.abs(qty);
+    const currentSold = getSoldCount(p.key);
+    const totalSoldAfter = currentSold + p.sheetSold + qty;
+    const available = p.setQty - totalSoldAfter;
+
+    if (!isReturn && available < 0) {
+      showToast('⚠️ Not enough stock available for +1!', 'error');
+      return;
+    }
+
+    if (isReturn && totalSoldAfter < 0) {
+      showToast('⚠️ Cannot return more than total sold!', 'error');
+      return;
+    }
+
+    const toastId = Math.random().toString(36).substring(7);
+    const actionText = isReturn ? 'Return -1' : 'Sale +1';
+    showToast(`⏳ Processing ${actionText} for ${p.category} ${p.color}...`, 'info');
+
+    // Optimistically update UI immediately
+    setSoldCount(p.key, currentSold + qty);
+    applyFilters();
+
+    try {
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serial: p.serial,
+          category: p.category,
+          color: p.color,
+          size: p.size,
+          soldQty: qty
+        })
+      });
+
+      const successText = isReturn ? 'returned to stock' : 'sold';
+      showToast(`✅ 1 set ${successText} for ${p.category} ${p.color} — Sheet updated!`, 'success');
+
+    } catch (err) {
+      console.error('Apps Script error on Quick Sale:', err);
+      // It's still saved locally via optimistic update
+      showToast(`⚠️ Local quick-save OK. Sheet update failed: ${err.message}`, 'error');
+    }
+  }
+
   // ===== COPY SOLD DATA =====
 
   function copySoldData() {
@@ -868,6 +982,8 @@
   // ===== EVENT LISTENERS =====
 
   function init() {
+    initStockFilters();
+
     // Search
     els.searchInput.addEventListener('input', debounce(applyFilters, 300));
 
@@ -901,7 +1017,10 @@
     els.btnClearFilters.addEventListener('click', clearAllFilters);
 
     // Expose to global for onclick handlers
-    window.mihira = { openSale: openSaleModal };
+    window.mihira = { 
+      openSale: openSaleModal,
+      quickSale: performQuickSale
+    };
 
     // Initial load
     fetchData();

@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1F5A5D">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Mihira Sales Price List - Manage inventory, track sales, and view product details for bangles and churis.">
   <title>Mihira Sales — Price List & Inventory</title>
   <link rel="stylesheet" href="style.css">
@@ -87,6 +90,21 @@
         </div>
         <select class="filter-select mobile-filters" id="sizeSelect">
           <option value="all">All Sizes</option>
+        </select>
+      </div>
+      <div class="filter-box">
+        <label class="filter-box-label" for="stockSelect">📦 Stock</label>
+        <div class="filter-group desktop-filters" id="stockFilterGroup">
+          <button class="filter-btn active" data-filter="all">All Stock</button>
+          <button class="filter-btn" data-filter="in_stock">In Stock</button>
+          <button class="filter-btn" data-filter="low_stock">Low Stock</button>
+          <button class="filter-btn" data-filter="out_of_stock">Out of Stock</button>
+        </div>
+        <select class="filter-select mobile-filters" id="stockSelect">
+          <option value="all">All Stock</option>
+          <option value="in_stock">In Stock</option>
+          <option value="low_stock">Low Stock</option>
+          <option value="out_of_stock">Out of Stock</option>
         </select>
       </div>
       <button class="btn btn-clear-filters" id="btnClearFilters" title="Clear all filters">
