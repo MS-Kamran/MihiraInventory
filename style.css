@@ -226,12 +226,19 @@ body {
 .stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
   transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;
   box-shadow: var(--shadow-card);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 
+    "icon value"
+    "icon label";
+  column-gap: 12px;
+  align-items: center;
 }
 
 .stat-card::before {
@@ -249,19 +256,20 @@ body {
 .stat-card:nth-child(4)::before { background: var(--rose-gold-dark); }
 
 .stat-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
 .stat-icon {
-  width: 40px;
-  height: 40px;
+  grid-area: icon;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.1rem;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .stat-card:nth-child(1) .stat-icon { background: var(--teal-bg); }
@@ -296,19 +304,23 @@ body {
 }
 
 .stat-value {
+  grid-area: value;
   font-family: 'Outfit', sans-serif;
-  font-size: 1.6rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: -2px;
+  line-height: 1.2;
 }
 
 .stat-label {
-  font-size: 0.72rem;
+  grid-area: label;
+  font-size: 0.65rem;
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
+  line-height: 1;
 }
 
 /* ===== APP BODY (DESKTOP LAYOUT) ===== */
@@ -328,10 +340,10 @@ body {
 .controls-bar {
   display: flex;
   flex-direction: column;
-  width: 260px;
+  width: 240px;
   flex-shrink: 0;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 10px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -366,13 +378,13 @@ body {
 
 .search-input {
   width: 100%;
-  padding: 10px 14px 10px 36px;
+  padding: 8px 12px 8px 32px;
   background: var(--cream-dark);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-full);
   color: var(--text-primary);
   font-family: 'Inter', sans-serif;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   outline: none;
   transition: all var(--transition-fast);
 }
@@ -397,28 +409,28 @@ body {
   background: var(--cream-dark);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  padding: 8px 12px;
+  padding: 6px 10px;
 }
 
 .filter-box-label {
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: var(--teal);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 4px;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
 }
 
 
 
 .filter-btn {
-  padding: 4px 10px;
+  padding: 3px 8px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-full);
   background: var(--cream);
   color: var(--text-secondary);
   font-family: 'Inter', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -479,13 +491,13 @@ body {
 }
 
 .view-btn {
-  padding: 6px 12px;
+  padding: 4px 10px;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   transition: all var(--transition-fast);
   touch-action: manipulation;
 }

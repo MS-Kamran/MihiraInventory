@@ -850,7 +850,10 @@
           category: p.category,
           color: p.color,
           size: p.size,
-          soldQty: isReturn ? -qty : qty
+          soldQty: isReturn ? -qty : qty,
+          timestamp: new Date().toISOString(),
+          date: new Date().toLocaleDateString('en-GB'),
+          time: new Date().toLocaleTimeString('en-GB')
         })
       });
 
@@ -915,7 +918,10 @@
           category: p.category,
           color: p.color,
           size: p.size,
-          soldQty: qty
+          soldQty: qty,
+          timestamp: new Date().toISOString(),
+          date: new Date().toLocaleDateString('en-GB'),
+          time: new Date().toLocaleTimeString('en-GB')
         })
       });
 
