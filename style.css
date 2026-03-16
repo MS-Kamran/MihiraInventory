@@ -337,9 +337,17 @@ body {
   border-radius: var(--radius-lg);
   position: sticky;
   top: calc(88px + max(16px, env(safe-area-inset-top)));
+  max-height: calc(100vh - 88px - max(16px, env(safe-area-inset-top)) - 20px);
+  overflow-y: auto;
   z-index: 50;
   box-shadow: var(--shadow-sm);
 }
+
+/* Custom Scrollbar for Controls Bar */
+.controls-bar::-webkit-scrollbar { width: 4px; }
+.controls-bar::-webkit-scrollbar-track { background: transparent; }
+.controls-bar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+.controls-bar::-webkit-scrollbar-thumb:hover { background: var(--teal); }
 
 .search-wrapper {
   position: relative;
@@ -1155,6 +1163,8 @@ body {
     border-right: none;
     padding: 14px 20px;
     top: calc(56px + max(16px, env(safe-area-inset-top)));
+    max-height: none;
+    overflow-y: visible;
   }
 
   .products-grid {
