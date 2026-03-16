@@ -59,95 +59,101 @@
       </div>
     </div>
 
-    <!-- ===== CONTROLS ===== -->
-    <div class="controls-bar">
-      <div class="search-wrapper">
-        <span class="search-icon">🔍</span>
-        <input type="text" class="search-input" id="searchInput" placeholder="Search by category, color, serial no...">
-      </div>
-      <div class="filter-box">
-        <label class="filter-box-label" for="categorySelect">📂 Category</label>
-        <div class="filter-group desktop-filters" id="filterGroup">
-          <button class="filter-btn active" data-filter="all">All</button>
+    <!-- ===== APP BODY (SIDEBAR + MAIN) ===== -->
+    <div class="app-body">
+      <!-- ===== CONTROLS SIDEBAR ===== -->
+      <aside class="controls-bar">
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" class="search-input" id="searchInput" placeholder="Search by category, color, serial no...">
         </div>
-        <select class="filter-select mobile-filters" id="categorySelect">
-          <option value="all">All</option>
-        </select>
-      </div>
-      <div class="filter-box">
-        <label class="filter-box-label" for="colorSelect">🎨 Color</label>
-        <div class="filter-group desktop-filters" id="colorFilterGroup">
-          <button class="filter-btn active" data-filter="all">All Colors</button>
+        <div class="filter-box">
+          <label class="filter-box-label" for="categorySelect">📂 Category</label>
+          <div class="filter-group desktop-filters" id="filterGroup">
+            <button class="filter-btn active" data-filter="all">All</button>
+          </div>
+          <select class="filter-select mobile-filters" id="categorySelect">
+            <option value="all">All</option>
+          </select>
         </div>
-        <select class="filter-select mobile-filters" id="colorSelect">
-          <option value="all">All Colors</option>
-        </select>
-      </div>
-      <div class="filter-box">
-        <label class="filter-box-label" for="sizeSelect">📏 Size</label>
-        <div class="filter-group desktop-filters" id="sizeFilterGroup">
-          <button class="filter-btn active" data-filter="all">All Sizes</button>
+        <div class="filter-box">
+          <label class="filter-box-label" for="colorSelect">🎨 Color</label>
+          <div class="filter-group desktop-filters" id="colorFilterGroup">
+            <button class="filter-btn active" data-filter="all">All Colors</button>
+          </div>
+          <select class="filter-select mobile-filters" id="colorSelect">
+            <option value="all">All Colors</option>
+          </select>
         </div>
-        <select class="filter-select mobile-filters" id="sizeSelect">
-          <option value="all">All Sizes</option>
-        </select>
-      </div>
-      <div class="filter-box">
-        <label class="filter-box-label" for="stockSelect">📦 Stock</label>
-        <div class="filter-group desktop-filters" id="stockFilterGroup">
-          <button class="filter-btn active" data-filter="all">All Stock</button>
-          <button class="filter-btn" data-filter="in_stock">In Stock</button>
-          <button class="filter-btn" data-filter="low_stock">Low Stock</button>
-          <button class="filter-btn" data-filter="out_of_stock">Out of Stock</button>
+        <div class="filter-box">
+          <label class="filter-box-label" for="sizeSelect">📏 Size</label>
+          <div class="filter-group desktop-filters" id="sizeFilterGroup">
+            <button class="filter-btn active" data-filter="all">All Sizes</button>
+          </div>
+          <select class="filter-select mobile-filters" id="sizeSelect">
+            <option value="all">All Sizes</option>
+          </select>
         </div>
-        <select class="filter-select mobile-filters" id="stockSelect">
-          <option value="all">All Stock</option>
-          <option value="in_stock">In Stock</option>
-          <option value="low_stock">Low Stock</option>
-          <option value="out_of_stock">Out of Stock</option>
-        </select>
-      </div>
-      <button class="btn btn-clear-filters" id="btnClearFilters" title="Clear all filters">
-        ✕ Clear Filters
-      </button>
-      <div class="view-toggle">
-        <button class="view-btn active" data-view="grid" id="viewGrid" title="Grid view">▦</button>
-        <button class="view-btn" data-view="table" id="viewTable" title="Table view">☰</button>
-      </div>
-    </div>
+        <div class="filter-box">
+          <label class="filter-box-label" for="stockSelect">📦 Stock</label>
+          <div class="filter-group desktop-filters" id="stockFilterGroup">
+            <button class="filter-btn active" data-filter="all">All Stock</button>
+            <button class="filter-btn" data-filter="in_stock">In Stock</button>
+            <button class="filter-btn" data-filter="low_stock">Low Stock</button>
+            <button class="filter-btn" data-filter="out_of_stock">Out of Stock</button>
+          </div>
+          <select class="filter-select mobile-filters" id="stockSelect">
+            <option value="all">All Stock</option>
+            <option value="in_stock">In Stock</option>
+            <option value="low_stock">Low Stock</option>
+            <option value="out_of_stock">Out of Stock</option>
+          </select>
+        </div>
+        <button class="btn btn-clear-filters" id="btnClearFilters" title="Clear all filters">
+          ✕ Clear Filters
+        </button>
+        <div class="view-toggle">
+          <button class="view-btn active" data-view="grid" id="viewGrid" title="Grid view">▦</button>
+          <button class="view-btn" data-view="table" id="viewTable" title="Table view">☰</button>
+        </div>
+      </aside>
 
-    <!-- ===== CONTENT AREA ===== -->
-    <div id="contentArea">
-      <div class="loading-container" id="loadingState">
-        <div class="loading-spinner"></div>
-        <div class="loading-text">Loading products from Mihira Sales...</div>
-      </div>
-    </div>
+      <!-- ===== MAIN CONTENT ===== -->
+      <main class="content-main">
+        <!-- ===== CONTENT AREA ===== -->
+        <div id="contentArea">
+          <div class="loading-container" id="loadingState">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading products from Mihira Sales...</div>
+          </div>
+        </div>
 
-    <!-- ===== GRID VIEW ===== -->
-    <div class="products-grid" id="productsGrid" style="display:none;"></div>
+        <!-- ===== GRID VIEW ===== -->
+        <div class="products-grid" id="productsGrid" style="display:none;"></div>
 
-    <!-- ===== TABLE VIEW ===== -->
-    <div class="products-table-wrapper" id="tableWrapper">
-      <table class="products-table">
-        <thead>
-          <tr>
-            <th>S/N</th>
-            <th>Product</th>
-            <th>Size</th>
-            <th>Sets Qty</th>
-            <th>Churi/Set</th>
-            <th>Selling Price</th>
-            <th>New Price</th>
-            <th>Discount (16%)</th>
-            <th>Sold</th>
-            <th>Available</th>
-            <th>Last Sale</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
+        <!-- ===== TABLE VIEW ===== -->
+        <div class="products-table-wrapper" id="tableWrapper">
+          <table class="products-table">
+            <thead>
+              <tr>
+                <th>S/N</th>
+                <th>Product</th>
+                <th>Size</th>
+                <th>Sets Qty</th>
+                <th>Churi/Set</th>
+                <th>Selling Price</th>
+                <th>New Price</th>
+                <th>Discount (16%)</th>
+                <th>Sold</th>
+                <th>Available</th>
+                <th>Last Sale</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </main>
     </div>
 
     <!-- ===== FOOTER ===== -->
