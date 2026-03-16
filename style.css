@@ -330,8 +330,8 @@ body {
   flex-direction: column;
   width: 260px;
   flex-shrink: 0;
-  gap: 16px;
-  padding: 18px;
+  gap: 8px;
+  padding: 12px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -387,9 +387,9 @@ body {
 
 .filter-group {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  padding: 2px 0;
+  padding: 0;
 }
 
 .filter-box {
@@ -397,7 +397,7 @@ body {
   background: var(--cream-dark);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  padding: 8px 12px;
 }
 
 .filter-box-label {
@@ -406,19 +406,19 @@ body {
   color: var(--teal);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 
 
 .filter-btn {
-  padding: 7px 14px;
+  padding: 4px 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-full);
   background: var(--cream);
   color: var(--text-secondary);
   font-family: 'Inter', sans-serif;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
