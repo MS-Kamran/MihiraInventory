@@ -269,37 +269,15 @@
   function buildCategoryFilters() {
     const cats = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
     
-    // Desktop Buttons
-    let html = '<button class="filter-btn active" data-filter="all">All</button>';
-    // Mobile Select
     let optionsHtml = '<option value="all">All Category</option>';
-    
     cats.forEach(cat => {
-      html += `<button class="filter-btn" data-filter="${cat}">${cat}</button>`;
       optionsHtml += `<option value="${cat}">${cat}</option>`;
     });
     
-    safeSetHTML(els.filterGroup, html);
     safeSetHTML(els.categorySelect, optionsHtml);
 
-    // Sync Desktop -> Mobile
-    els.filterGroup.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        els.filterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentFilter = btn.dataset.filter;
-        els.categorySelect.value = currentFilter; // Sync visual
-        buildColorFilters();
-        applyFilters();
-      });
-    });
-
-    // Sync Mobile -> Desktop
     els.categorySelect.addEventListener('change', (e) => {
       currentFilter = e.target.value;
-      els.filterGroup.querySelectorAll('.filter-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.filter === currentFilter);
-      });
       buildColorFilters();
       applyFilters();
     });
@@ -311,38 +289,16 @@
     const filtered = currentFilter === 'all' ? products : products.filter(p => p.category === currentFilter);
     const colors = [...new Set(filtered.map(p => p.color).filter(Boolean))].sort();
     
-    // Desktop
-    let html = '<button class="filter-btn active" data-filter="all">All Colors</button>';
-    // Mobile
     let optionsHtml = '<option value="all">All Colors</option>';
-
     colors.forEach(color => {
-      html += `<button class="filter-btn" data-filter="${color}">${color}</button>`;
       optionsHtml += `<option value="${color}">${color}</option>`;
     });
     
-    safeSetHTML(els.colorFilterGroup, html);
     safeSetHTML(els.colorSelect, optionsHtml);
     currentColorFilter = 'all';
 
-    // Sync Desktop -> Mobile
-    els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentColorFilter = btn.dataset.filter;
-        els.colorSelect.value = currentColorFilter; // Sync visual
-        buildSizeFilters();
-        applyFilters();
-      });
-    });
-
-    // Sync Mobile -> Desktop
     els.colorSelect.addEventListener('change', (e) => {
       currentColorFilter = e.target.value;
-      els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.filter === currentColorFilter);
-      });
       buildSizeFilters();
       applyFilters();
     });
@@ -357,37 +313,16 @@
     
     const sizes = [...new Set(filtered.map(p => p.size).filter(Boolean))].sort();
     
-    // Desktop
-    let html = '<button class="filter-btn active" data-filter="all">All Sizes</button>';
-    // Mobile
     let optionsHtml = '<option value="all">All Sizes</option>';
-
     sizes.forEach(size => {
-      html += `<button class="filter-btn" data-filter="${size}">${size}</button>`;
       optionsHtml += `<option value="${size}">${size}</option>`;
     });
     
-    safeSetHTML(els.sizeFilterGroup, html);
     safeSetHTML(els.sizeSelect, optionsHtml);
     currentSizeFilter = 'all';
 
-    // Sync Desktop -> Mobile
-    els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentSizeFilter = btn.dataset.filter;
-        els.sizeSelect.value = currentSizeFilter; // Sync visual
-        applyFilters();
-      });
-    });
-
-    // Sync Mobile -> Desktop
     els.sizeSelect.addEventListener('change', (e) => {
       currentSizeFilter = e.target.value;
-      els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.filter === currentSizeFilter);
-      });
       applyFilters();
     });
   }
@@ -419,18 +354,6 @@
     currentSizeFilter = 'all';
     els.searchInput.value = '';
 
-    // Sync desktop buttons
-    els.filterGroup.querySelectorAll('.filter-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.filter === 'all');
-    });
-    els.colorFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.filter === 'all');
-    });
-    els.sizeFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.filter === 'all');
-    });
-
-    // Sync mobile selects
     els.categorySelect.value = 'all';
     els.colorSelect.value = 'all';
     els.sizeSelect.value = 'all';
@@ -443,23 +366,8 @@
 
   // ===== STOCK FILTERS =====
   function initStockFilters() {
-    // Sync Desktop -> Mobile
-    els.stockFilterGroup.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        els.stockFilterGroup.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentStockFilter = btn.dataset.filter;
-        els.stockSelect.value = currentStockFilter;
-        applyFilters();
-      });
-    });
-
-    // Sync Mobile -> Desktop
     els.stockSelect.addEventListener('change', (e) => {
       currentStockFilter = e.target.value;
-      els.stockFilterGroup.querySelectorAll('.filter-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.filter === currentStockFilter);
-      });
       applyFilters();
     });
   }
@@ -526,6 +434,60 @@
     renderGrid();
     renderTable();
     updateStats();
+  }
+
+  // ===== SEARCH SUGGESTIONS =====
+  function showSuggestions() {
+    const query = els.searchInput.value.toLowerCase().trim();
+    const suggestionsEl = $('#searchSuggestions');
+    
+    if (!query) {
+      suggestionsEl.style.display = 'none';
+      return;
+    }
+
+    // Determine matching categories, colors, series
+    const cats = [...new Set(products.filter(p => p.category.toLowerCase().includes(query)).map(p => p.category))].slice(0, 3);
+    const colors = [...new Set(products.filter(p => p.color.toLowerCase().includes(query)).map(p => p.color))].slice(0, 3);
+    const serials = [...new Set(products.filter(p => p.serial.toLowerCase().includes(query)).map(p => p.serial))].slice(0, 3);
+
+    if (cats.length === 0 && colors.length === 0 && serials.length === 0) {
+      suggestionsEl.style.display = 'none';
+      return;
+    }
+
+    let html = '';
+    
+    cats.forEach(c => {
+      html += `<div class="search-suggestion-item" data-val="${c}" data-type="category">
+        <span class="suggestion-icon">📂</span> <span class="suggestion-text">Category: <b>${c}</b></span>
+      </div>`;
+    });
+    
+    colors.forEach(c => {
+      html += `<div class="search-suggestion-item" data-val="${c}" data-type="color">
+        <span class="suggestion-icon">🎨</span> <span class="suggestion-text">Color: <b>${c}</b></span>
+      </div>`;
+    });
+    
+    serials.forEach(s => {
+      html += `<div class="search-suggestion-item" data-val="${s}" data-type="serial">
+        <span class="suggestion-icon">#️⃣</span> <span class="suggestion-text">Serial: <b>${s}</b></span>
+      </div>`;
+    });
+
+    safeSetHTML(suggestionsEl, html);
+    suggestionsEl.style.display = 'block';
+
+    // Click handler for suggestions
+    suggestionsEl.querySelectorAll('.search-suggestion-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        const val = item.dataset.val;
+        els.searchInput.value = val;
+        applyFilters();
+        suggestionsEl.style.display = 'none';
+      });
+    });
   }
 
   // ===== RENDER GRID =====
@@ -991,7 +953,18 @@
     initStockFilters();
 
     // Search
-    els.searchInput.addEventListener('input', debounce(applyFilters, 300));
+    els.searchInput.addEventListener('input', debounce(() => {
+      applyFilters();
+      showSuggestions();
+    }, 300));
+    
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.search-wrapper')) {
+        const suggestionsEl = $('#searchSuggestions');
+        if (suggestionsEl) suggestionsEl.style.display = 'none';
+      }
+    });
 
     // View toggle
     $('#viewGrid').addEventListener('click', () => showView('grid'));

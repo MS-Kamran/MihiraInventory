@@ -65,44 +65,30 @@
       <aside class="controls-bar">
         <div class="search-wrapper">
           <span class="search-icon">🔍</span>
-          <input type="text" class="search-input" id="searchInput" placeholder="Search by category, color, serial no...">
+          <input type="text" class="search-input" id="searchInput" placeholder="Search by category, color, serial no..." autocomplete="off">
+          <div class="search-suggestions" id="searchSuggestions"></div>
         </div>
         <div class="filter-box">
           <label class="filter-box-label" for="categorySelect">📂 Category</label>
-          <div class="filter-group desktop-filters" id="filterGroup">
-            <button class="filter-btn active" data-filter="all">All</button>
-          </div>
-          <select class="filter-select mobile-filters" id="categorySelect">
-            <option value="all">All</option>
+          <select class="filter-select" id="categorySelect">
+            <option value="all">All Category</option>
           </select>
         </div>
         <div class="filter-box">
           <label class="filter-box-label" for="colorSelect">🎨 Color</label>
-          <div class="filter-group desktop-filters" id="colorFilterGroup">
-            <button class="filter-btn active" data-filter="all">All Colors</button>
-          </div>
-          <select class="filter-select mobile-filters" id="colorSelect">
+          <select class="filter-select" id="colorSelect">
             <option value="all">All Colors</option>
           </select>
         </div>
         <div class="filter-box">
           <label class="filter-box-label" for="sizeSelect">📏 Size</label>
-          <div class="filter-group desktop-filters" id="sizeFilterGroup">
-            <button class="filter-btn active" data-filter="all">All Sizes</button>
-          </div>
-          <select class="filter-select mobile-filters" id="sizeSelect">
+          <select class="filter-select" id="sizeSelect">
             <option value="all">All Sizes</option>
           </select>
         </div>
         <div class="filter-box">
           <label class="filter-box-label" for="stockSelect">📦 Stock</label>
-          <div class="filter-group desktop-filters" id="stockFilterGroup">
-            <button class="filter-btn active" data-filter="all">All Stock</button>
-            <button class="filter-btn" data-filter="in_stock">In Stock</button>
-            <button class="filter-btn" data-filter="low_stock">Low Stock</button>
-            <button class="filter-btn" data-filter="out_of_stock">Out of Stock</button>
-          </div>
-          <select class="filter-select mobile-filters" id="stockSelect">
+          <select class="filter-select" id="stockSelect">
             <option value="all">All Stock</option>
             <option value="in_stock">In Stock</option>
             <option value="low_stock">Low Stock</option>
