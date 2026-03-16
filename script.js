@@ -352,11 +352,13 @@
     currentFilter = 'all';
     currentColorFilter = 'all';
     currentSizeFilter = 'all';
+    currentStockFilter = 'all';
     els.searchInput.value = '';
 
     els.categorySelect.value = 'all';
     els.colorSelect.value = 'all';
     els.sizeSelect.value = 'all';
+    els.stockSelect.value = 'all';
 
     // Rebuild dependent filters
     buildColorFilters();
