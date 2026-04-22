@@ -1,0 +1,19 @@
+{
+  "name": "Mihira Sales — Price List & Inventory",
+  "short_name": "Mihira Sales",
+  "description": "Manage inventory, track sales, and view product details for bangles and churis.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFF8F0",
+  "theme_color": "#1F5A5D",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

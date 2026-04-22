@@ -1,17 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#1F5A5D">
+  <meta name="theme-color" content="#1F5A5D" id="metaThemeColor">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Mihira Sales Price List - Manage inventory, track sales, and view product details for bangles and churis.">
   <title>Mihira Sales — Price List & Inventory</title>
+  <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
+
+    <!-- ===== PULL TO REFRESH ===== -->
+    <div class="ptr-container" id="ptrContainer">
+      <div class="ptr-spinner" id="ptrSpinner">
+        <svg class="ptr-arrow" id="ptrArrow" viewBox="0 0 24 24" width="24" height="24">
+          <path d="M12 4V1L8 5l4 4V6a6 6 0 016 6 6 6 0 01-6 6 6 6 0 01-6-6H4a8 8 0 008 8 8 8 0 008-8 8 8 0 00-8-8z" fill="currentColor"/>
+        </svg>
+        <div class="ptr-loader" id="ptrLoader"></div>
+      </div>
+      <span class="ptr-text" id="ptrText">Pull to refresh</span>
+    </div>
 
     <!-- ===== HEADER ===== -->
     <header class="app-header">
@@ -23,9 +35,18 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn btn-success" id="btnCopySold" title="Copy sold data to clipboard">
-          📋 Copy Sold Data
+        <button class="btn btn-icon" id="btnDarkMode" title="Toggle dark mode">
+          <span class="dark-mode-icon">🌙</span>
         </button>
+        <button class="btn btn-icon" id="btnAnalytics" title="Sales Analytics">📊</button>
+        <div class="export-dropdown-wrapper">
+          <button class="btn btn-success" id="btnExport" title="Export data">📤 Export</button>
+          <div class="export-dropdown" id="exportDropdown">
+            <button class="export-option" id="btnExportExcel">📗 Export to Excel (.xlsx)</button>
+            <button class="export-option" id="btnExportPDF">📕 Export to PDF</button>
+            <button class="export-option" id="btnCopySold">📋 Copy Sold Data</button>
+          </div>
+        </div>
         <button class="btn" id="btnResetSold" title="Reset all sold tracking data">
           🔄 Reset
         </button>
@@ -34,6 +55,19 @@
         </button>
       </div>
     </header>
+
+    <!-- ===== LOW STOCK ALERT ===== -->
+    <div class="low-stock-alert" id="lowStockAlert" style="display: none;">
+      <div class="alert-content">
+        <span class="alert-pulse"></span>
+        <span class="alert-icon">🔔</span>
+        <span class="alert-text">
+          <strong id="lowStockCount">0</strong> products are low or out of stock!
+        </span>
+        <button class="alert-action" id="btnShowLowStock">View Items</button>
+      </div>
+      <button class="alert-dismiss" id="btnDismissAlert" title="Dismiss">✕</button>
+    </div>
 
     <!-- ===== STATS ===== -->
     <div class="stats-grid">
@@ -56,6 +90,28 @@
         <div class="stat-icon">💰</div>
         <div class="stat-value" id="statDailySales">—</div>
         <div class="stat-label">Today's Sales</div>
+      </div>
+    </div>
+
+    <!-- ===== ANALYTICS PANEL ===== -->
+    <div class="analytics-panel" id="analyticsPanel" style="display: none;">
+      <div class="analytics-header">
+        <h2 class="analytics-title">📊 Sales Analytics</h2>
+        <button class="analytics-close" id="btnCloseAnalytics" title="Close analytics">✕</button>
+      </div>
+      <div class="analytics-grid">
+        <div class="chart-card">
+          <h3 class="chart-title">Sales by Category</h3>
+          <div class="chart-container"><canvas id="chartCategory"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3 class="chart-title">Sales by Color</h3>
+          <div class="chart-container"><canvas id="chartColor"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3 class="chart-title">Stock Overview</h3>
+          <div class="chart-container"><canvas id="chartStock"></canvas></div>
+        </div>
       </div>
     </div>
 
@@ -93,6 +149,25 @@
             <option value="in_stock">In Stock</option>
             <option value="low_stock">Low Stock</option>
             <option value="out_of_stock">Out of Stock</option>
+          </select>
+        </div>
+        <div class="filter-box">
+          <label class="filter-box-label">💰 Price Range</label>
+          <div class="price-range-inputs">
+            <input type="number" id="priceMin" class="price-range-input" placeholder="Min ৳" min="0">
+            <span class="price-range-sep">—</span>
+            <input type="number" id="priceMax" class="price-range-input" placeholder="Max ৳" min="0">
+          </div>
+        </div>
+        <div class="filter-box">
+          <label class="filter-box-label" for="sortSelect">📌 Sort By</label>
+          <select class="filter-select" id="sortSelect">
+            <option value="default">Default (Popular)</option>
+            <option value="price_asc">Price: Low → High</option>
+            <option value="price_desc">Price: High → Low</option>
+            <option value="name_az">Name: A → Z</option>
+            <option value="name_za">Name: Z → A</option>
+            <option value="most_sold">Most Sold</option>
           </select>
         </div>
         <button class="btn btn-clear-filters" id="btnClearFilters" title="Clear all filters">
@@ -139,6 +214,14 @@
             <tbody id="tableBody"></tbody>
           </table>
         </div>
+
+        <!-- ===== PAGINATION ===== -->
+        <div class="pagination-bar" id="paginationBar" style="display: none;">
+          <button class="pagination-btn" id="paginationPrev" title="Previous page">‹ Prev</button>
+          <div class="pagination-pages" id="paginationPages"></div>
+          <button class="pagination-btn" id="paginationNext" title="Next page">Next ›</button>
+          <span class="pagination-info" id="paginationInfo"></span>
+        </div>
       </main>
     </div>
 
@@ -180,9 +263,33 @@
     </div>
   </div>
 
+  <!-- ===== IMAGE LIGHTBOX ===== -->
+  <div class="lightbox-overlay" id="lightboxOverlay">
+    <button class="lightbox-close" id="lightboxClose" title="Close">✕</button>
+    <img class="lightbox-image" id="lightboxImage" src="" alt="Product Image">
+    <div class="lightbox-caption" id="lightboxCaption"></div>
+  </div>
+
   <!-- ===== TOAST ===== -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- CDN: Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <!-- CDN: SheetJS (XLSX) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- CDN: jsPDF + AutoTable -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
   <script src="script.js"></script>
+
+  <!-- SERVICE WORKER REGISTRATION -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>

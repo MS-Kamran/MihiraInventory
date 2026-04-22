@@ -10,6 +10,8 @@
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzy9NWqJDOd-Bae7sCny9HI6K7iJAp3i9As9wOfmOm9pglIWuNp_srhGszpdKcjuJUJjw/exec';
   const STORAGE_KEY = 'mihira_sold_data';
   const SEARCH_HISTORY_KEY = 'mihira_search_popularity';
+  const THEME_KEY = 'mihira_theme';
+  const ITEMS_PER_PAGE = 20;
 
   // ===== STATE =====
   let products = [];
@@ -18,9 +20,16 @@
   let currentColorFilter = 'all';
   let currentSizeFilter = 'all';
   let currentStockFilter = 'all';
+  let currentSort = 'default';
   let currentView = 'grid';
+  let currentPage = 1;
   let currentModalProduct = null;
   let isInitialLoad = true;
+  let pendingRefreshTimer = null;
+  let priceMin = 0;
+  let priceMax = Infinity;
+  let chartInstances = { category: null, color: null, stock: null };
+  let lowStockDismissed = false;
 
   // ===== DOM REFS =====
   const $ = (sel) => document.querySelector(sel);
@@ -33,14 +42,13 @@
     tableWrapper: $('#tableWrapper'),
     tableBody: $('#tableBody'),
     searchInput: $('#searchInput'),
-    filterGroup: $('#filterGroup'),
-    colorFilterGroup: $('#colorFilterGroup'),
-    sizeFilterGroup: $('#sizeFilterGroup'),
-    stockFilterGroup: $('#stockFilterGroup'),
     categorySelect: $('#categorySelect'),
     colorSelect: $('#colorSelect'),
     sizeSelect: $('#sizeSelect'),
     stockSelect: $('#stockSelect'),
+    sortSelect: $('#sortSelect'),
+    priceMinInput: $('#priceMin'),
+    priceMaxInput: $('#priceMax'),
     saleModal: $('#saleModal'),
     modalTitle: $('#modalTitle'),
     modalPreview: $('#modalPreview'),
@@ -53,6 +61,18 @@
     statSold: $('#statSold'),
     statDailySales: $('#statDailySales'),
     btnClearFilters: $('#btnClearFilters'),
+    analyticsPanel: $('#analyticsPanel'),
+    lowStockAlert: $('#lowStockAlert'),
+    lowStockCount: $('#lowStockCount'),
+    paginationBar: $('#paginationBar'),
+    paginationPages: $('#paginationPages'),
+    paginationInfo: $('#paginationInfo'),
+    lightboxOverlay: $('#lightboxOverlay'),
+    lightboxImage: $('#lightboxImage'),
+    lightboxCaption: $('#lightboxCaption'),
+    exportDropdown: $('#exportDropdown'),
+    ptrContainer: $('#ptrContainer'),
+    ptrText: $('#ptrText'),
   };
 
   // ===== HELPERS =====
@@ -63,6 +83,7 @@
     : null;
 
   function safeSetHTML(el, html) {
+    if (!el) return;
     if (safePolicy) {
       el.innerHTML = safePolicy.createHTML(html);
     } else {
@@ -71,9 +92,8 @@
   }
 
   /** Convert Google Drive share link to viewable thumbnail */
-  function driveThumb(link) {
+  function driveThumb(link, size = 400) {
     if (!link) return null;
-    // Extract file ID from various Drive URL formats
     const patterns = [
       /\/file\/d\/([a-zA-Z0-9_-]+)/,
       /id=([a-zA-Z0-9_-]+)/,
@@ -81,7 +101,7 @@
     ];
     for (const pattern of patterns) {
       const m = link.match(pattern);
-      if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`;
+      if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w${size}`;
     }
     return null;
   }
@@ -175,6 +195,29 @@
     setTimeout(() => toast.remove(), 3000);
   }
 
+  // ===== DARK MODE =====
+
+  function applyTheme() {
+    const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    const icon = $('.dark-mode-icon');
+    if (icon) icon.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+    const meta = $('#metaThemeColor');
+    if (meta) meta.content = savedTheme === 'dark' ? '#0d2a2c' : '#1F5A5D';
+  }
+
+  function toggleDarkMode() {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = current === 'dark' ? 'light' : 'dark';
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme();
+    // Re-render charts if analytics panel is open
+    if (els.analyticsPanel && els.analyticsPanel.style.display !== 'none') {
+      renderAnalytics();
+    }
+    showToast(next === 'dark' ? '🌙 Dark mode enabled' : '☀️ Light mode enabled', 'info');
+  }
+
   // ===== DATA FETCHING =====
 
   async function fetchData() {
@@ -184,7 +227,8 @@
     els.tableWrapper.style.display = 'none';
 
     try {
-      const resp = await fetch(CSV_URL);
+      const cacheBustUrl = CSV_URL + '&_t=' + Date.now();
+      const resp = await fetch(cacheBustUrl, { cache: 'no-store' });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const text = await resp.text();
       const rows = parseCSV(text);
@@ -222,6 +266,7 @@
           color,
           link,
           thumb: driveThumb(link),
+          thumbHires: driveThumb(link, 1200),
           size,
           setQty: parseInt(setQty) || 0,
           churiInSet: parseInt(churiInSet) || 0,
@@ -241,6 +286,9 @@
 
       // After first load, disable initial load sorting
       isInitialLoad = false;
+
+      // Clear local sold cache — sheet data is now the single source of truth
+      localStorage.removeItem(STORAGE_KEY);
 
       els.contentArea.style.display = 'none';
       showView(currentView);
@@ -264,44 +312,55 @@
     }
   }
 
-  // ===== CATEGORY FILTERS =====
+  // ===== CATEGORY FILTERS WITH COUNT BADGES =====
 
   function buildCategoryFilters() {
-    const cats = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
-    
-    let optionsHtml = '<option value="all">All Category</option>';
-    cats.forEach(cat => {
-      optionsHtml += `<option value="${cat}">${cat}</option>`;
+    const catCounts = {};
+    products.forEach(p => {
+      if (p.category) catCounts[p.category] = (catCounts[p.category] || 0) + 1;
     });
-    
+    const cats = Object.keys(catCounts).sort();
+
+    let optionsHtml = `<option value="all">All Category (${products.length})</option>`;
+    cats.forEach(cat => {
+      optionsHtml += `<option value="${cat}">${cat} (${catCounts[cat]})</option>`;
+    });
+
     safeSetHTML(els.categorySelect, optionsHtml);
 
-    els.categorySelect.addEventListener('change', (e) => {
+    // Use onchange to prevent duplicate listeners on re-build
+    els.categorySelect.onchange = (e) => {
       currentFilter = e.target.value;
+      currentPage = 1;
       buildColorFilters();
       applyFilters();
-    });
+    };
 
     buildColorFilters();
   }
 
   function buildColorFilters() {
     const filtered = currentFilter === 'all' ? products : products.filter(p => p.category === currentFilter);
-    const colors = [...new Set(filtered.map(p => p.color).filter(Boolean))].sort();
-    
-    let optionsHtml = '<option value="all">All Colors</option>';
-    colors.forEach(color => {
-      optionsHtml += `<option value="${color}">${color}</option>`;
+    const colorCounts = {};
+    filtered.forEach(p => {
+      if (p.color) colorCounts[p.color] = (colorCounts[p.color] || 0) + 1;
     });
-    
+    const colors = Object.keys(colorCounts).sort();
+
+    let optionsHtml = `<option value="all">All Colors (${filtered.length})</option>`;
+    colors.forEach(color => {
+      optionsHtml += `<option value="${color}">${color} (${colorCounts[color]})</option>`;
+    });
+
     safeSetHTML(els.colorSelect, optionsHtml);
     currentColorFilter = 'all';
 
-    els.colorSelect.addEventListener('change', (e) => {
+    els.colorSelect.onchange = (e) => {
       currentColorFilter = e.target.value;
+      currentPage = 1;
       buildSizeFilters();
       applyFilters();
-    });
+    };
 
     buildSizeFilters();
   }
@@ -310,21 +369,26 @@
     let filtered = products;
     if (currentFilter !== 'all') filtered = filtered.filter(p => p.category === currentFilter);
     if (currentColorFilter !== 'all') filtered = filtered.filter(p => p.color === currentColorFilter);
-    
-    const sizes = [...new Set(filtered.map(p => p.size).filter(Boolean))].sort();
-    
-    let optionsHtml = '<option value="all">All Sizes</option>';
-    sizes.forEach(size => {
-      optionsHtml += `<option value="${size}">${size}</option>`;
+
+    const sizeCounts = {};
+    filtered.forEach(p => {
+      if (p.size) sizeCounts[p.size] = (sizeCounts[p.size] || 0) + 1;
     });
-    
+    const sizes = Object.keys(sizeCounts).sort();
+
+    let optionsHtml = `<option value="all">All Sizes (${filtered.length})</option>`;
+    sizes.forEach(size => {
+      optionsHtml += `<option value="${size}">${size} (${sizeCounts[size]})</option>`;
+    });
+
     safeSetHTML(els.sizeSelect, optionsHtml);
     currentSizeFilter = 'all';
 
-    els.sizeSelect.addEventListener('change', (e) => {
+    els.sizeSelect.onchange = (e) => {
       currentSizeFilter = e.target.value;
+      currentPage = 1;
       applyFilters();
-    });
+    };
   }
 
   // ===== SEARCH POPULARITY TRACKING =====
@@ -353,12 +417,19 @@
     currentColorFilter = 'all';
     currentSizeFilter = 'all';
     currentStockFilter = 'all';
+    currentSort = 'default';
+    currentPage = 1;
+    priceMin = 0;
+    priceMax = Infinity;
     els.searchInput.value = '';
 
     els.categorySelect.value = 'all';
     els.colorSelect.value = 'all';
     els.sizeSelect.value = 'all';
     els.stockSelect.value = 'all';
+    if (els.sortSelect) els.sortSelect.value = 'default';
+    if (els.priceMinInput) els.priceMinInput.value = '';
+    if (els.priceMaxInput) els.priceMaxInput.value = '';
 
     // Rebuild dependent filters
     buildColorFilters();
@@ -366,15 +437,26 @@
     showToast('✕ All filters cleared', 'info');
   }
 
-  // ===== STOCK FILTERS =====
-  function initStockFilters() {
-    els.stockSelect.addEventListener('change', (e) => {
-      currentStockFilter = e.target.value;
-      applyFilters();
-    });
+  /** Schedule a data refresh from the sheet (debounced) */
+  function scheduleRefresh(delayMs = 2500) {
+    if (pendingRefreshTimer) clearTimeout(pendingRefreshTimer);
+    pendingRefreshTimer = setTimeout(() => {
+      pendingRefreshTimer = null;
+      showToast('⟳ Syncing with sheet...', 'info');
+      fetchData();
+    }, delayMs);
   }
 
-  // ===== FILTERING & SEARCH =====
+  // ===== STOCK FILTERS =====
+  function initStockFilters() {
+    els.stockSelect.onchange = (e) => {
+      currentStockFilter = e.target.value;
+      currentPage = 1;
+      applyFilters();
+    };
+  }
+
+  // ===== FILTERING, SEARCH & SORTING =====
 
   function applyFilters() {
     let query = els.searchInput.value.toLowerCase().trim();
@@ -408,6 +490,11 @@
       if (currentStockFilter === 'low_stock' && (available > 2 || available === 0)) return false;
       if (currentStockFilter === 'out_of_stock' && available > 0) return false;
 
+      // Price range filter
+      const price = p.discountPrice || p.sellingPrice;
+      if (priceMin > 0 && price < priceMin) return false;
+      if (priceMax < Infinity && price > priceMax) return false;
+
       // Search query
       if (query) {
         if (prefixType) {
@@ -427,22 +514,50 @@
       trackSearchPopularity(query, filteredProducts);
     }
 
-    // On initial load (no filters active), sort by search popularity
-    if (isInitialLoad || (!query && currentFilter === 'all' && currentColorFilter === 'all' && currentSizeFilter === 'all')) {
-      const popularity = getSearchPopularity();
-      filteredProducts.sort((a, b) => (popularity[b.key] || 0) - (popularity[a.key] || 0));
-    }
+    // Apply sorting
+    applySorting(query);
 
     renderGrid();
     renderTable();
+    renderPagination();
     updateStats();
+  }
+
+  function applySorting(query) {
+    switch (currentSort) {
+      case 'price_asc':
+        filteredProducts.sort((a, b) => (a.discountPrice || a.sellingPrice) - (b.discountPrice || b.sellingPrice));
+        break;
+      case 'price_desc':
+        filteredProducts.sort((a, b) => (b.discountPrice || b.sellingPrice) - (a.discountPrice || a.sellingPrice));
+        break;
+      case 'name_az':
+        filteredProducts.sort((a, b) => `${a.category} ${a.color}`.localeCompare(`${b.category} ${b.color}`));
+        break;
+      case 'name_za':
+        filteredProducts.sort((a, b) => `${b.category} ${b.color}`.localeCompare(`${a.category} ${a.color}`));
+        break;
+      case 'most_sold':
+        filteredProducts.sort((a, b) => {
+          const soldA = getSoldCount(a.key) + a.sheetSold;
+          const soldB = getSoldCount(b.key) + b.sheetSold;
+          return soldB - soldA;
+        });
+        break;
+      default:
+        // Default: popularity sort on initial load or when no specific filters
+        if (isInitialLoad || (!query && currentFilter === 'all' && currentColorFilter === 'all' && currentSizeFilter === 'all')) {
+          const popularity = getSearchPopularity();
+          filteredProducts.sort((a, b) => (popularity[b.key] || 0) - (popularity[a.key] || 0));
+        }
+    }
   }
 
   // ===== SEARCH SUGGESTIONS =====
   function showSuggestions() {
     const query = els.searchInput.value.toLowerCase().trim();
     const suggestionsEl = $('#searchSuggestions');
-    
+
     if (!query) {
       suggestionsEl.style.display = 'none';
       return;
@@ -459,19 +574,19 @@
     }
 
     let html = '';
-    
+
     cats.forEach(c => {
       html += `<div class="search-suggestion-item" data-val="${c}" data-type="category">
         <span class="suggestion-icon">📂</span> <span class="suggestion-text">Category: <b>${c}</b></span>
       </div>`;
     });
-    
+
     colors.forEach(c => {
       html += `<div class="search-suggestion-item" data-val="${c}" data-type="color">
         <span class="suggestion-icon">🎨</span> <span class="suggestion-text">Color: <b>${c}</b></span>
       </div>`;
     });
-    
+
     serials.forEach(s => {
       html += `<div class="search-suggestion-item" data-val="${s}" data-type="serial">
         <span class="suggestion-icon">#️⃣</span> <span class="suggestion-text">Serial: <b>${s}</b></span>
@@ -483,18 +598,78 @@
 
     // Click handler for suggestions
     suggestionsEl.querySelectorAll('.search-suggestion-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        const val = item.dataset.val;
-        els.searchInput.value = val;
+      item.addEventListener('click', () => {
+        els.searchInput.value = item.dataset.val;
+        currentPage = 1;
         applyFilters();
         suggestionsEl.style.display = 'none';
       });
     });
   }
 
+  // ===== PAGINATION =====
+
+  function getPaginatedProducts() {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProducts.slice(start, start + ITEMS_PER_PAGE);
+  }
+
+  function renderPagination() {
+    const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+
+    if (totalPages <= 1) {
+      els.paginationBar.style.display = 'none';
+      return;
+    }
+
+    els.paginationBar.style.display = 'flex';
+
+    // Build page buttons with ellipsis
+    const pages = new Set([1, totalPages]);
+    for (let i = Math.max(1, currentPage - 1); i <= Math.min(totalPages, currentPage + 1); i++) {
+      pages.add(i);
+    }
+    const sorted = [...pages].sort((a, b) => a - b);
+
+    let pagesHtml = '';
+    let prev = 0;
+    sorted.forEach(p => {
+      if (p - prev > 1) pagesHtml += '<span class="pagination-ellipsis">…</span>';
+      pagesHtml += `<button class="pagination-page ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
+      prev = p;
+    });
+
+    safeSetHTML(els.paginationPages, pagesHtml);
+
+    const start = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+    const end = Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length);
+    els.paginationInfo.textContent = `${start}–${end} of ${filteredProducts.length}`;
+
+    $('#paginationPrev').disabled = currentPage === 1;
+    $('#paginationNext').disabled = currentPage === totalPages;
+
+    // Click handlers for page numbers
+    els.paginationPages.querySelectorAll('.pagination-page').forEach(btn => {
+      btn.addEventListener('click', () => goToPage(parseInt(btn.dataset.page)));
+    });
+  }
+
+  function goToPage(page) {
+    const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+    currentPage = Math.max(1, Math.min(page, totalPages));
+    renderGrid();
+    renderTable();
+    renderPagination();
+    // Scroll to top of products
+    const target = els.productsGrid.style.display !== 'none' ? els.productsGrid : els.tableWrapper;
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   // ===== RENDER GRID =====
 
   function renderGrid() {
+    const displayProducts = getPaginatedProducts();
+
     if (filteredProducts.length === 0) {
       safeSetHTML(els.productsGrid, `
         <div class="no-results" style="grid-column: 1 / -1;">
@@ -506,15 +681,19 @@
     }
 
     let html = '';
-    filteredProducts.forEach((p, i) => {
+    displayProducts.forEach((p, i) => {
       const sold = getSoldCount(p.key) + p.sheetSold;
       const available = Math.max(0, p.setQty - sold);
       const stockClass = available === 0 ? 'stock-out' : available <= 2 ? 'stock-low' : 'stock-in';
       const stockLabel = available === 0 ? 'Out of Stock' : available <= 2 ? 'Low Stock' : 'In Stock';
 
+      const lightboxUrl = p.thumbHires || p.thumb || '';
+      const lightboxCaption = `${p.category} — ${p.color} (#${p.serial})`;
+      const escapedCaption = lightboxCaption.replace(/'/g, "\\'");
+
       html += `
         <div class="product-card" style="animation-delay: ${i * 0.04}s">
-          <div class="product-image-wrapper">
+          <div class="product-image-wrapper" ${lightboxUrl ? `onclick="window.mihira.openLightbox('${lightboxUrl}', '${escapedCaption}')" style="cursor:pointer;" title="Click to enlarge"` : ''}>
             ${p.thumb
               ? `<img class="product-image" src="${p.thumb}" alt="${p.category} ${p.color}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'product-image-placeholder\\'>📸</div>'">`
               : '<div class="product-image-placeholder">📸</div>'}
@@ -570,10 +749,12 @@
   // ===== RENDER TABLE =====
 
   function renderTable() {
+    const displayProducts = getPaginatedProducts();
+
     if (filteredProducts.length === 0) {
       safeSetHTML(els.tableBody, `
         <tr>
-          <td colspan="11" style="text-align:center; padding: 40px; color: var(--text-muted);">
+          <td colspan="12" style="text-align:center; padding: 40px; color: var(--text-muted);">
             No products found
           </td>
         </tr>`);
@@ -581,17 +762,21 @@
     }
 
     let html = '';
-    filteredProducts.forEach(p => {
+    displayProducts.forEach(p => {
       const sold = getSoldCount(p.key) + p.sheetSold;
       const available = Math.max(0, p.setQty - sold);
       const stockClass = available === 0 ? 'stock-out' : available <= 2 ? 'stock-low' : 'stock-in';
+
+      const lightboxUrl = p.thumbHires || p.thumb || '';
+      const lightboxCaption = `${p.category} — ${p.color} (#${p.serial})`;
+      const escapedCaption = lightboxCaption.replace(/'/g, "\\'");
 
       html += `
         <tr>
           <td>${p.serial}</td>
           <td>
             <div class="table-product-info">
-              ${p.thumb ? `<img class="table-image" src="${p.thumb}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+              ${p.thumb ? `<img class="table-image" src="${p.thumb}" alt="" loading="lazy" onerror="this.style.display='none'" ${lightboxUrl ? `onclick="window.mihira.openLightbox('${lightboxUrl}', '${escapedCaption}')" style="cursor:pointer;"` : ''}>` : ''}
               <div>
                 <div class="table-product-name">${p.category}</div>
                 <div class="table-product-color">${p.color}</div>
@@ -685,6 +870,9 @@
     animateCounter(els.statAvailable, totalAvailable);
     animateCounter(els.statSold, totalSold);
     animateCounter(els.statDailySales, dailySales);
+
+    // Check low stock after stats update
+    checkLowStock();
   }
 
   function animateCounter(el, target) {
@@ -704,6 +892,330 @@
         el.textContent = Math.round(current + increment * step);
       }
     }, duration / steps);
+  }
+
+  // ===== LOW STOCK ALERTS =====
+
+  function checkLowStock() {
+    if (lowStockDismissed) return;
+    let count = 0;
+    products.forEach(p => {
+      const sold = getSoldCount(p.key) + p.sheetSold;
+      const available = Math.max(0, p.setQty - sold);
+      if (available <= 2) count++;
+    });
+
+    if (count > 0 && els.lowStockAlert) {
+      els.lowStockCount.textContent = count;
+      els.lowStockAlert.style.display = 'flex';
+    } else if (els.lowStockAlert) {
+      els.lowStockAlert.style.display = 'none';
+    }
+  }
+
+  // ===== ANALYTICS / CHARTS =====
+  // ===== COLOR NAME → CSS COLOR MAPPER =====
+
+  /** Convert a product color name to an actual CSS color value */
+  function colorNameToCSS(name) {
+    if (!name) return '#888';
+    const n = name.toLowerCase().replace(/[\s\-_]+/g, '');
+
+    const MAP = {
+      // Basics
+      black: '#1a1a1a', white: '#ffffff', red: '#e53e3e', blue: '#3b82f6',
+      green: '#22c55e', yellow: '#eab308', orange: '#f97316', pink: '#ec4899',
+      purple: '#a855f7', violet: '#8b5cf6', brown: '#92400e', grey: '#6b7280',
+      gray: '#6b7280', cream: '#fffdd0', ivory: '#fffff0', beige: '#f5f5dc',
+      silver: '#c0c0c0', gold: '#d4a017', golden: '#daa520', copper: '#b87333',
+      bronze: '#cd7f32', maroon: '#800000', navy: '#1e3a5f', teal: '#14b8a6',
+      cyan: '#06b6d4', magenta: '#d946ef', indigo: '#6366f1', coral: '#f97171',
+      peach: '#fdb68d', lavender: '#c084fc', turquoise: '#2dd4bf', olive: '#84cc16',
+      rust: '#b45309', wine: '#722f37', burgundy: '#800020', khaki: '#bdb76b',
+      salmon: '#fa8072', mint: '#a7f3d0', aqua: '#22d3ee', plum: '#9333ea',
+      tan: '#d2b48c', chocolate: '#7b3f00', charcoal: '#374151', pearl: '#f0ead6',
+      rani: '#ad1457', pista: '#93c572', mehendi: '#6b8e23', sandal: '#c2a66b',
+      mustard: '#e3a008', lemon: '#fde047', strawberry: '#fc5c7d', cherry: '#de3163',
+
+      // Deep variants
+      deepblue: '#1e40af', deepblack: '#0a0a0a', deepred: '#991b1b',
+      deepgreen: '#166534', deeppink: '#db2777', deeppurple: '#7e22ce',
+      deeporange: '#ea580c', deepbrown: '#5c2d0e', deepteal: '#0f766e',
+      deepmaroon: '#5a0012', deepgold: '#b8860b', deepviolet: '#5b21b6',
+
+      // Sky / Light variants
+      skyblue: '#38bdf8', skycolor: '#7dd3fc',
+      lightblue: '#93c5fd', lightgreen: '#86efac', lightpink: '#f9a8d4',
+      lightyellow: '#fef08a', lightpurple: '#d8b4fe', lightorange: '#fdba74',
+      lightgray: '#d1d5db', lightgrey: '#d1d5db', lightbrown: '#b8860b',
+
+      // Lite variants (common in bangle names)
+      litepink: '#f9a8d4', liteblue: '#93c5fd', litegreen: '#86efac',
+      litepurple: '#d8b4fe', liteorange: '#fdba74', litegold: '#fcd34d',
+
+      // Rose variants
+      rosegold: '#b76e79', rose: '#f43f5e', rosewater: '#f4c2c2',
+      rosepink: '#ff66b2',
+
+      // Multi / Mix
+      mix: '#8b5cf6', multi: '#8b5cf6', multicolor: '#8b5cf6',
+      rainbow: '#8b5cf6', assorted: '#8b5cf6',
+
+      // Metals
+      platinum: '#e5e4e2', nickel: '#727472', brass: '#b5a642',
+      steel: '#71797e', metallic: '#aaa9ad',
+
+      // Misc
+      offwhite: '#f5f0e8', bottlegreen: '#006a4e', firozi: '#40e0d0',
+      feroza: '#40e0d0', neon: '#39ff14', neongreen: '#39ff14',
+      neonpink: '#ff6ec7', fluorescent: '#ccff00', transparent: '#d1d5db',
+    };
+
+    if (MAP[n]) return MAP[n];
+
+    // Try partial matches: find the longest matching key in the name
+    let best = null, bestLen = 0;
+    for (const key of Object.keys(MAP)) {
+      if (n.includes(key) && key.length > bestLen) {
+        best = key;
+        bestLen = key.length;
+      }
+    }
+    if (best) return MAP[best];
+
+    // Try CSS named color — create a temp element to check
+    const testEl = document.createElement('span');
+    testEl.style.color = name;
+    if (testEl.style.color) return name;
+
+    // Fallback: generate a stable color from the name hash
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return CHART_COLORS[Math.abs(hash) % CHART_COLORS.length];
+  }
+
+
+  const CHART_COLORS = [
+    '#1F5A5D', '#D4A98A', '#C08B6B', '#2A7A7E', '#B8845F',
+    '#164042', '#E3C0A8', '#A67350', '#3D9B9E', '#8B6F5A',
+    '#10b981', '#ef4444', '#f59e0b', '#6366f1', '#ec4899',
+  ];
+
+  function destroyCharts() {
+    Object.keys(chartInstances).forEach(k => {
+      if (chartInstances[k]) {
+        chartInstances[k].destroy();
+        chartInstances[k] = null;
+      }
+    });
+  }
+
+  function renderAnalytics() {
+    if (typeof Chart === 'undefined') {
+      showToast('⚠️ Charts library not loaded. Check your internet.', 'error');
+      return;
+    }
+
+    destroyCharts();
+
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    Chart.defaults.color = isDark ? '#9aa5b4' : '#666';
+    const cardBg = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#fff';
+
+    // 1. Sales by Category (Pie)
+    const catData = {};
+    products.forEach(p => {
+      const sold = getSoldCount(p.key) + p.sheetSold;
+      if (sold > 0) catData[p.category] = (catData[p.category] || 0) + sold;
+    });
+
+    if (Object.keys(catData).length > 0) {
+      chartInstances.category = new Chart($('#chartCategory'), {
+        type: 'pie',
+        data: {
+          labels: Object.keys(catData),
+          datasets: [{
+            data: Object.values(catData),
+            backgroundColor: CHART_COLORS,
+            borderWidth: 2,
+            borderColor: cardBg
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, font: { family: 'Inter' } } }
+          }
+        }
+      });
+    }
+
+    // 2. Sales by Color (Bar — top 10)
+    const colorData = {};
+    products.forEach(p => {
+      const sold = getSoldCount(p.key) + p.sheetSold;
+      if (sold > 0) colorData[p.color] = (colorData[p.color] || 0) + sold;
+    });
+    const sortedColors = Object.entries(colorData).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+    // Map color names to actual CSS colors for the bar chart
+    const barColors = sortedColors.map(c => colorNameToCSS(c[0]));
+
+    if (sortedColors.length > 0) {
+      chartInstances.color = new Chart($('#chartColor'), {
+        type: 'bar',
+        data: {
+          labels: sortedColors.map(c => c[0]),
+          datasets: [{
+            label: 'Sets Sold',
+            data: sortedColors.map(c => c[1]),
+            backgroundColor: barColors,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: barColors.map(c => c === '#ffffff' || c === '#fffdd0' || c === '#fffff0' ? '#ccc' : 'transparent')
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    // 3. Stock Overview (Doughnut)
+    let inStock = 0, lowStock = 0, outOfStock = 0;
+    products.forEach(p => {
+      const sold = getSoldCount(p.key) + p.sheetSold;
+      const available = Math.max(0, p.setQty - sold);
+      if (available === 0) outOfStock++;
+      else if (available <= 2) lowStock++;
+      else inStock++;
+    });
+
+    chartInstances.stock = new Chart($('#chartStock'), {
+      type: 'doughnut',
+      data: {
+        labels: ['In Stock', 'Low Stock', 'Out of Stock'],
+        datasets: [{
+          data: [inStock, lowStock, outOfStock],
+          backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+          borderWidth: 2,
+          borderColor: cardBg
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, font: { family: 'Inter' } } }
+        }
+      }
+    });
+  }
+
+  function toggleAnalytics() {
+    const panel = els.analyticsPanel;
+    if (panel.style.display === 'none') {
+      panel.style.display = 'block';
+      renderAnalytics();
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      panel.style.display = 'none';
+      destroyCharts();
+    }
+  }
+
+  // ===== EXPORT =====
+
+  function exportToExcel() {
+    if (typeof XLSX === 'undefined') {
+      showToast('⚠️ Excel library not loaded. Check your internet connection.', 'error');
+      return;
+    }
+
+    const data = (filteredProducts.length ? filteredProducts : products).map(p => {
+      const sold = getSoldCount(p.key) + p.sheetSold;
+      const available = Math.max(0, p.setQty - sold);
+      return {
+        'Serial': p.serial,
+        'Category': p.category,
+        'Color': p.color,
+        'Size': p.size,
+        'Sets Qty': p.setQty,
+        'Churi/Set': p.churiInSet,
+        'Selling Price': p.sellingPrice,
+        'New Price': p.newPrice,
+        'Discount Price': p.discountPrice,
+        'Sold': sold,
+        'Available': available,
+        'Last Sale': p.lastSaleDate || ''
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Mihira Products');
+    XLSX.writeFile(wb, `Mihira_Sales_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    showToast('📗 Excel file downloaded!', 'success');
+  }
+
+  function exportToPDF() {
+    if (!window.jspdf) {
+      showToast('⚠️ PDF library not loaded. Check your internet connection.', 'error');
+      return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape');
+
+    doc.setFontSize(18);
+    doc.setTextColor(31, 90, 93);
+    doc.text('Mihira Sales — Product Report', 14, 22);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated: ${new Date().toLocaleString()} | Products: ${filteredProducts.length || products.length}`, 14, 30);
+
+    const rows = (filteredProducts.length ? filteredProducts : products).map(p => {
+      const sold = getSoldCount(p.key) + p.sheetSold;
+      const available = Math.max(0, p.setQty - sold);
+      return [p.serial, p.category, p.color, p.size, p.setQty, p.churiInSet,
+              p.sellingPrice, p.newPrice, p.discountPrice, sold, available, p.lastSaleDate || '—'];
+    });
+
+    doc.autoTable({
+      startY: 36,
+      head: [['S/N', 'Category', 'Color', 'Size', 'Sets', 'C/Set', 'Sell ৳', 'New ৳', 'Disc ৳', 'Sold', 'Avail', 'Last Sale']],
+      body: rows,
+      theme: 'striped',
+      headStyles: { fillColor: [31, 90, 93], fontSize: 7, fontStyle: 'bold' },
+      styles: { fontSize: 7, cellPadding: 3 },
+      alternateRowStyles: { fillColor: [245, 237, 228] }
+    });
+
+    doc.save(`Mihira_Sales_${new Date().toISOString().slice(0, 10)}.pdf`);
+    showToast('📕 PDF file downloaded!', 'success');
+  }
+
+  // ===== IMAGE LIGHTBOX =====
+
+  function openLightbox(url, caption) {
+    if (!url) return;
+    els.lightboxImage.src = url;
+    els.lightboxCaption.textContent = caption || '';
+    els.lightboxOverlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    els.lightboxOverlay.classList.remove('active');
+    setTimeout(() => { els.lightboxImage.src = ''; }, 300);
+    document.body.style.overflow = '';
   }
 
   // ===== SALE MODAL =====
@@ -726,7 +1238,7 @@
     els.saleQty.value = '';
     els.saleQty.max = available;
     els.saleModal.classList.add('active');
-    
+
     // Reset toggle to Sale
     const saleRadio = document.querySelector('input[name="saleAction"][value="sale"]');
     if (saleRadio) saleRadio.checked = true;
@@ -804,8 +1316,7 @@
 
     try {
       // Send to Google Sheet via Apps Script
-      // For returns, we send negative qty so the sheet logic can just add it
-      const response = await fetch(APPS_SCRIPT_URL, {
+      await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
@@ -821,18 +1332,21 @@
         })
       });
 
-      // Also save to localStorage as backup
+      // Optimistic local update for immediate UI feedback
       setSoldCount(p.key, currentSold + (isReturn ? -qty : qty));
       closeSaleModal();
       applyFilters();
-      
+
       const actionText = isReturn ? 'returned to stock' : 'sold';
-      showToast(`✅ ${qty} set(s) ${actionText} for ${p.category} ${p.color} — Sheet updated!`, 'success');
+      showToast(`✅ ${qty} set(s) ${actionText} for ${p.category} ${p.color} — Syncing...`, 'success');
+
+      // Re-fetch fresh data from sheet to stay in sync
+      scheduleRefresh(2500);
 
     } catch (err) {
       console.error('Apps Script error:', err);
       // Still save locally even if sheet update fails
-      setSoldCount(p.key, currentSold + qty);
+      setSoldCount(p.key, currentSold + (isReturn ? -qty : qty));
       closeSaleModal();
       applyFilters();
       showToast(`⚠️ Saved locally but sheet update may have failed. Error: ${err.message}`, 'error');
@@ -864,7 +1378,6 @@
       return;
     }
 
-    const toastId = Math.random().toString(36).substring(7);
     const actionText = isReturn ? 'Return -1' : 'Sale +1';
     showToast(`⏳ Processing ${actionText} for ${p.category} ${p.color}...`, 'info');
 
@@ -873,7 +1386,7 @@
     applyFilters();
 
     try {
-      const response = await fetch(APPS_SCRIPT_URL, {
+      await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
@@ -890,7 +1403,10 @@
       });
 
       const successText = isReturn ? 'returned to stock' : 'sold';
-      showToast(`✅ 1 set ${successText} for ${p.category} ${p.color} — Sheet updated!`, 'success');
+      showToast(`✅ 1 set ${successText} for ${p.category} ${p.color} — Syncing...`, 'success');
+
+      // Re-fetch fresh data from sheet to stay in sync
+      scheduleRefresh(2500);
 
     } catch (err) {
       console.error('Apps Script error on Quick Sale:', err);
@@ -942,31 +1458,63 @@
   function resetSoldData() {
     if (!confirm('Are you sure you want to reset all sold tracking data? This cannot be undone.')) return;
     localStorage.removeItem(STORAGE_KEY);
-    
+
     // Pull fresh data from sheet after reset
     isInitialLoad = true;
-    showToast('🔄 Resetting tracking data and pooling fresh data from sheet...', 'info');
+    showToast('🔄 Resetting tracking data and pulling fresh data from sheet...', 'info');
     fetchData();
+  }
+
+  // ===== EXPORT DROPDOWN =====
+
+  function toggleExportDropdown() {
+    els.exportDropdown.classList.toggle('active');
   }
 
   // ===== EVENT LISTENERS =====
 
   function init() {
+    // Apply saved theme on load
+    applyTheme();
+
     initStockFilters();
 
     // Search
     els.searchInput.addEventListener('input', debounce(() => {
+      currentPage = 1;
       applyFilters();
       showSuggestions();
     }, 300));
-    
-    // Hide suggestions when clicking outside
+
+    // Hide suggestions / export dropdown when clicking outside
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.search-wrapper')) {
         const suggestionsEl = $('#searchSuggestions');
         if (suggestionsEl) suggestionsEl.style.display = 'none';
       }
+      if (!e.target.closest('.export-dropdown-wrapper')) {
+        els.exportDropdown?.classList.remove('active');
+      }
     });
+
+    // Sort
+    if (els.sortSelect) {
+      els.sortSelect.addEventListener('change', (e) => {
+        currentSort = e.target.value;
+        currentPage = 1;
+        applyFilters();
+      });
+    }
+
+    // Price range
+    const priceDebounce = debounce(() => {
+      priceMin = parseFloat(els.priceMinInput?.value) || 0;
+      priceMax = els.priceMaxInput?.value ? parseFloat(els.priceMaxInput.value) : Infinity;
+      currentPage = 1;
+      applyFilters();
+    }, 400);
+    if (els.priceMinInput) els.priceMinInput.addEventListener('input', priceDebounce);
+    if (els.priceMaxInput) els.priceMaxInput.addEventListener('input', priceDebounce);
 
     // View toggle
     $('#viewGrid').addEventListener('click', () => showView('grid'));
@@ -985,8 +1533,35 @@
       if (e.key === 'Enter') confirmSale();
     });
 
+    // Dark mode toggle
+    $('#btnDarkMode')?.addEventListener('click', toggleDarkMode);
+
+    // Analytics toggle
+    $('#btnAnalytics')?.addEventListener('click', toggleAnalytics);
+    $('#btnCloseAnalytics')?.addEventListener('click', () => {
+      els.analyticsPanel.style.display = 'none';
+      destroyCharts();
+    });
+
+    // Export dropdown
+    $('#btnExport')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleExportDropdown();
+    });
+    $('#btnExportExcel')?.addEventListener('click', () => {
+      exportToExcel();
+      els.exportDropdown.classList.remove('active');
+    });
+    $('#btnExportPDF')?.addEventListener('click', () => {
+      exportToPDF();
+      els.exportDropdown.classList.remove('active');
+    });
+    $('#btnCopySold')?.addEventListener('click', () => {
+      copySoldData();
+      els.exportDropdown.classList.remove('active');
+    });
+
     // Header buttons
-    $('#btnCopySold').addEventListener('click', copySoldData);
     $('#btnResetSold').addEventListener('click', resetSoldData);
     $('#btnRefresh').addEventListener('click', () => {
       isInitialLoad = true;
@@ -997,14 +1572,180 @@
     // Clear filters button
     els.btnClearFilters.addEventListener('click', clearAllFilters);
 
+    // Low stock alert actions
+    $('#btnShowLowStock')?.addEventListener('click', () => {
+      els.stockSelect.value = 'low_stock';
+      currentStockFilter = 'low_stock';
+      currentPage = 1;
+      applyFilters();
+      els.lowStockAlert.style.display = 'none';
+    });
+    $('#btnDismissAlert')?.addEventListener('click', () => {
+      lowStockDismissed = true;
+      els.lowStockAlert.style.display = 'none';
+    });
+
+    // Lightbox
+    $('#lightboxClose')?.addEventListener('click', closeLightbox);
+    els.lightboxOverlay?.addEventListener('click', (e) => {
+      if (e.target === els.lightboxOverlay) closeLightbox();
+    });
+
+    // Pagination
+    $('#paginationPrev')?.addEventListener('click', () => goToPage(currentPage - 1));
+    $('#paginationNext')?.addEventListener('click', () => goToPage(currentPage + 1));
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Escape: close lightbox → modal → analytics
+      if (e.key === 'Escape') {
+        if (els.lightboxOverlay?.classList.contains('active')) {
+          closeLightbox();
+        } else if (els.saleModal?.classList.contains('active')) {
+          closeSaleModal();
+        } else if (els.analyticsPanel?.style.display !== 'none') {
+          els.analyticsPanel.style.display = 'none';
+          destroyCharts();
+        }
+      }
+      // "/" to focus search (when not already in an input)
+      if (e.key === '/' && !e.target.closest('input, textarea, select')) {
+        e.preventDefault();
+        els.searchInput.focus();
+      }
+    });
+
     // Expose to global for onclick handlers
-    window.mihira = { 
+    window.mihira = {
       openSale: openSaleModal,
-      quickSale: performQuickSale
+      quickSale: performQuickSale,
+      openLightbox: openLightbox,
     };
+
+    // ===== PULL-TO-REFRESH =====
+    initPullToRefresh();
 
     // Initial load
     fetchData();
+  }
+
+  // ===== PULL-TO-REFRESH GESTURE =====
+
+  function initPullToRefresh() {
+    const ptrContainer = els.ptrContainer;
+    const ptrText = els.ptrText;
+    if (!ptrContainer) return;
+
+    const PTR_THRESHOLD = 70;
+    const PTR_MAX = 100;
+    let startY = 0;
+    let currentY = 0;
+    let isPulling = false;
+    let isRefreshing = false;
+
+    function isAtTop() {
+      return window.scrollY <= 0;
+    }
+
+    function isTouchDevice() {
+      return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    }
+
+    if (!isTouchDevice()) return;
+
+    document.addEventListener('touchstart', (e) => {
+      if (isRefreshing) return;
+      if (!isAtTop()) return;
+      // Don't trigger on modals, lightbox, or interactive elements
+      if (e.target.closest('.modal-overlay, .lightbox-overlay, .controls-bar input, .controls-bar select')) return;
+
+      startY = e.touches[0].clientY;
+      isPulling = true;
+      ptrContainer.style.transition = 'none';
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!isPulling || isRefreshing) return;
+      if (!isAtTop()) {
+        resetPTR();
+        return;
+      }
+
+      currentY = e.touches[0].clientY;
+      let pullDistance = currentY - startY;
+
+      if (pullDistance < 0) {
+        resetPTR();
+        return;
+      }
+
+      // Apply resistance — diminishing returns as you pull further
+      pullDistance = Math.min(PTR_MAX, pullDistance * 0.45);
+
+      ptrContainer.style.height = pullDistance + 'px';
+      ptrContainer.classList.add('pulling');
+
+      // Rotate arrow proportionally
+      const progress = Math.min(pullDistance / PTR_THRESHOLD, 1);
+      const arrow = $('#ptrArrow');
+      if (arrow) arrow.style.transform = `rotate(${progress * 180}deg)`;
+
+      if (pullDistance >= PTR_THRESHOLD) {
+        ptrContainer.classList.add('ready');
+        ptrText.textContent = 'Release to refresh';
+      } else {
+        ptrContainer.classList.remove('ready');
+        ptrText.textContent = 'Pull to refresh';
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => {
+      if (!isPulling || isRefreshing) return;
+
+      const pullDistance = (currentY - startY) * 0.45;
+      isPulling = false;
+      ptrContainer.style.transition = '';
+
+      if (pullDistance >= PTR_THRESHOLD) {
+        // Trigger refresh
+        isRefreshing = true;
+        ptrContainer.classList.remove('pulling', 'ready');
+        ptrContainer.classList.add('refreshing');
+        ptrContainer.style.height = '54px';
+        ptrText.textContent = 'Refreshing...';
+
+        // Perform refresh
+        isInitialLoad = true;
+        fetchData().then(() => {
+          finishPTR();
+        }).catch(() => {
+          finishPTR();
+        });
+      } else {
+        resetPTR();
+      }
+
+      startY = 0;
+      currentY = 0;
+    }, { passive: true });
+
+    function resetPTR() {
+      isPulling = false;
+      ptrContainer.style.transition = '';
+      ptrContainer.style.height = '0';
+      ptrContainer.classList.remove('pulling', 'ready', 'refreshing');
+      ptrText.textContent = 'Pull to refresh';
+      const arrow = $('#ptrArrow');
+      if (arrow) arrow.style.transform = '';
+    }
+
+    function finishPTR() {
+      ptrText.textContent = 'Updated ✓';
+      setTimeout(() => {
+        isRefreshing = false;
+        resetPTR();
+      }, 800);
+    }
   }
 
   function debounce(fn, ms) {
